@@ -8,6 +8,7 @@ import { StepWhereYouSell } from './StepWhereYouSell';
 import { StepWhoYouSellTo } from './StepWhoYouSellTo';
 import { StepCompetitors } from './StepCompetitors';
 import { StepResults } from './StepResults';
+import { OnboardingMap } from './OnboardingMap';
 import { Crosshair } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -318,68 +319,11 @@ export function OnboardingPage() {
           {/* Right Panel - Map (appears at step 3) */}
           {showMap && (
             <div className="w-1/2 bg-gray-100 relative">
-              <MapPlaceholder data={data} step={step} />
+              <OnboardingMap data={data} step={step} />
             </div>
           )}
         </div>
       </main>
-    </div>
-  );
-}
-
-// Placeholder map component - will be replaced with real map
-function MapPlaceholder({ data, step }: { data: OnboardingData; step: number }) {
-  return (
-    <div className="absolute inset-0 flex flex-col">
-      {/* Map Controls */}
-      <div className="absolute top-4 right-4 z-10 flex gap-2">
-        <button className="px-4 py-2 bg-white rounded-lg border border-gray-200 text-sm font-medium hover:bg-gray-50 transition-colors">
-          Draw
-        </button>
-      </div>
-      
-      {/* Map Area */}
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center text-gray-500">
-          <p className="text-lg font-medium mb-2">Map Interface</p>
-          <p className="text-sm">Territory visualization will appear here</p>
-          {data.states.length > 0 && (
-            <p className="text-sm mt-2 text-gray-700">
-              Selected: {data.states.join(', ')}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Zoom Controls */}
-      <div className="absolute bottom-4 right-4 flex flex-col gap-1">
-        <button className="w-10 h-10 bg-white rounded-lg border border-gray-200 flex items-center justify-center text-lg font-medium hover:bg-gray-50">
-          +
-        </button>
-        <button className="w-10 h-10 bg-white rounded-lg border border-gray-200 flex items-center justify-center text-lg font-medium hover:bg-gray-50">
-          −
-        </button>
-      </div>
-
-      {/* Prospect markers (step 5) */}
-      {step === 5 && (
-        <div className="absolute top-1/3 right-1/4 space-y-4">
-          <ProspectMarker name="75 Havensville PD" />
-          <ProspectMarker name="85 Havensville PD" className="translate-x-8" />
-          <ProspectMarker name="75 Chelsea PD" className="translate-y-20 -translate-x-4" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ProspectMarker({ name, className }: { name: string; className?: string }) {
-  return (
-    <div className={cn(
-      "px-3 py-1.5 bg-white rounded-full border border-gray-200 text-sm font-medium shadow-sm",
-      className
-    )}>
-      {name}
     </div>
   );
 }
