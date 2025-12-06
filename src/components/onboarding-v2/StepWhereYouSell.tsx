@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { OnboardingData } from './OnboardingPage';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -56,11 +56,22 @@ export function StepWhereYouSell({ data, updateData, onNext, onBack }: StepWhere
   const [selectedCities, setSelectedCities] = useState<string[]>(data.cities);
   const [description, setDescription] = useState(data.territoryDescription || '');
 
+  // Sync local state with data prop on mount
+  useEffect(() => {
+    setSelectedRegion(data.region || '');
+    setSelectedStates(data.states);
+    setSelectedCities(data.cities);
+    setDescription(data.territoryDescription || '');
+  }, []);
+
   const handleRegionSelect = (region: string) => {
     if (selectedRegion === region) {
       setSelectedRegion('');
     } else {
       setSelectedRegion(region);
+      // Auto-select all states in the region
+      const regionStates = STATES_BY_REGION[region] || [];
+      setSelectedStates(regionStates);
       // Auto-advance to state tab
       setActiveTab('state');
     }
@@ -83,11 +94,28 @@ export function StepWhereYouSell({ data, updateData, onNext, onBack }: StepWhere
   };
 
   const handleContinue = () => {
+    // Build territory filters
+    const territoryFilters: string[] = [];
+    if (selectedRegion) {
+      territoryFilters.push(selectedRegion);
+    }
+    if (selectedStates.length > 0 && selectedStates.length <= 3) {
+      selectedStates.forEach(s => territoryFilters.push(s));
+    } else if (selectedStates.length > 3) {
+      territoryFilters.push(`${selectedStates.length} states`);
+    }
+    if (selectedCities.length > 0 && selectedCities.length <= 2) {
+      selectedCities.forEach(c => territoryFilters.push(c));
+    } else if (selectedCities.length > 2) {
+      territoryFilters.push(`${selectedCities.length} cities`);
+    }
+
     updateData({
       region: selectedRegion || undefined,
       states: selectedStates,
       cities: selectedCities,
       territoryDescription: description || undefined,
+      filters: territoryFilters, // Start fresh with territory filters
     });
     onNext();
   };
@@ -102,7 +130,8 @@ export function StepWhereYouSell({ data, updateData, onNext, onBack }: StepWhere
     ? selectedStates.flatMap(state => CITIES_BY_STATE[state] || DEFAULT_CITIES).sort()
     : [];
 
-  const canContinue = selectedRegion || selectedStates.length > 0 || selectedCities.length > 0 || description.trim();
+  // Must have at least one selection to continue
+  const canContinue = selectedRegion || selectedStates.length > 0 || description.trim().length > 10;
 
   return (
     <div className="py-16 px-8">
@@ -163,23 +192,37 @@ export function StepWhereYouSell({ data, updateData, onNext, onBack }: StepWhere
             {selectedRegion && (
               <SelectionPill 
                 label={selectedRegion} 
-                onRemove={() => setSelectedRegion('')}
+                onRemove={() => {
+                  setSelectedRegion('');
+                  setSelectedStates([]);
+                  setSelectedCities([]);
+                }}
               />
             )}
-            {selectedStates.map(state => (
+            {selectedStates.slice(0, 5).map(state => (
               <SelectionPill 
                 key={state} 
                 label={state} 
                 onRemove={() => handleStateToggle(state)}
               />
             ))}
-            {selectedCities.map(city => (
+            {selectedStates.length > 5 && (
+              <span className="px-3 py-1.5 bg-gray-100 rounded-full text-sm border border-gray-200">
+                +{selectedStates.length - 5} more states
+              </span>
+            )}
+            {selectedCities.slice(0, 3).map(city => (
               <SelectionPill 
                 key={city} 
                 label={city} 
                 onRemove={() => handleCityToggle(city)}
               />
             ))}
+            {selectedCities.length > 3 && (
+              <span className="px-3 py-1.5 bg-gray-100 rounded-full text-sm border border-gray-200">
+                +{selectedCities.length - 3} more cities
+              </span>
+            )}
           </div>
         )}
 
@@ -294,6 +337,13 @@ export function StepWhereYouSell({ data, updateData, onNext, onBack }: StepWhere
             Continue
           </Button>
         </div>
+
+        {/* Helper text */}
+        {!canContinue && (
+          <p className="text-center text-sm text-gray-500 mt-4">
+            Select a region, state, or describe your territory to continue
+          </p>
+        )}
       </div>
     </div>
   );
@@ -347,4 +397,3 @@ function SelectionPill({ label, onRemove }: { label: string; onRemove: () => voi
     </span>
   );
 }
-

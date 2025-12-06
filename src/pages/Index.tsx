@@ -223,12 +223,17 @@ export default function Index() {
   const { profile, loading: profileLoading } = useProfile();
   const navigate = useNavigate();
 
-  // If user is logged in and has completed onboarding, redirect to discover
+  // Redirect logged-in users appropriately
   useEffect(() => {
-    if (user && profile?.onboarding_complete) {
-      navigate('/discover');
+    if (user && !profileLoading) {
+      if (profile?.onboarding_complete) {
+        navigate('/discover');
+      } else {
+        // User logged in but hasn't completed onboarding
+        navigate('/start');
+      }
     }
-  }, [user, profile, navigate]);
+  }, [user, profile, profileLoading, navigate]);
 
   // Show loading only for authenticated users checking profile
   if (user && (authLoading || profileLoading)) {
