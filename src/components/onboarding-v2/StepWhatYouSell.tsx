@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { OnboardingData } from './OnboardingPage';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
-import { Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { Loader2, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface StepWhatYouSellProps {
   data: OnboardingData;
@@ -14,7 +17,9 @@ interface StepWhatYouSellProps {
 export function StepWhatYouSell({ data, updateData, onNext }: StepWhatYouSellProps) {
   const { signInWithGoogle } = useAuth();
   const [description, setDescription] = useState(data.productDescription);
+  const [websiteUrl, setWebsiteUrl] = useState(data.companyDomain || '');
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleContinue = () => {
     if (description.trim()) {
@@ -23,14 +28,61 @@ export function StepWhatYouSell({ data, updateData, onNext }: StepWhatYouSellPro
     }
   };
 
+  const handleAnalyzeWebsite = async () => {
+    if (!websiteUrl.trim()) {
+      toast.error('Please enter a website URL');
+      return;
+    }
+
+    // Normalize URL
+    let url = websiteUrl.trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('analyze-company', {
+        body: { website_url: url }
+      });
+
+      if (error) throw error;
+
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      // Update form with AI analysis
+      const newDescription = result.selling_proposition || '';
+      setDescription(newDescription);
+      
+      updateData({
+        productDescription: newDescription,
+        companyName: result.company_name || undefined,
+        companyDomain: url,
+        competitors: result.competitors || [],
+      });
+
+      toast.success('Website analyzed! Review the description below.');
+    } catch (error) {
+      console.error('Analysis error:', error);
+      toast.error('Failed to analyze website. Try entering your description manually.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     setIsSigningIn(true);
     try {
-      await signInWithGoogle();
-      // After sign in, we would fetch company info from the user's email domain
-      // For now, just continue with empty data
+      const { error } = await signInWithGoogle();
+      if (error) {
+        toast.error('Sign in failed. Please try again.');
+      }
     } catch (error) {
       console.error('Sign in failed:', error);
+      toast.error('Sign in failed. Please try again.');
     } finally {
       setIsSigningIn(false);
     }
@@ -47,8 +99,43 @@ export function StepWhatYouSell({ data, updateData, onNext }: StepWhatYouSellPro
         </h1>
         
         <p className="text-gray-600 text-center mb-12">
-          Tell us what you are trying to sell. You can be as descriptive as possible, or simply drop your company's name/URL.
+          Tell us what you are trying to sell. You can be as descriptive as possible, or simply drop your company's URL.
         </p>
+
+        {/* Website URL Input */}
+        <div className="mb-6">
+          <div className="flex gap-2">
+            <Input
+              value={websiteUrl}
+              onChange={(e) => setWebsiteUrl(e.target.value)}
+              placeholder="yourcompany.com"
+              className="flex-1 h-12 text-base border-gray-300 focus:border-gray-400 focus:ring-0 rounded-xl"
+              onKeyDown={(e) => e.key === 'Enter' && handleAnalyzeWebsite()}
+            />
+            <Button
+              onClick={handleAnalyzeWebsite}
+              disabled={isAnalyzing || !websiteUrl.trim()}
+              variant="outline"
+              className="h-12 px-4 rounded-xl border-gray-300"
+            >
+              {isAnalyzing ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Sparkles className="w-5 h-5" />
+              )}
+            </Button>
+          </div>
+          <p className="text-sm text-gray-500 mt-2">
+            Enter your website and we'll analyze it with AI
+          </p>
+        </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-sm text-gray-500 font-medium">OR</span>
+          <div className="flex-1 h-px bg-gray-200" />
+        </div>
 
         {/* Text Input */}
         <Textarea
@@ -121,4 +208,3 @@ function GoogleIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-
