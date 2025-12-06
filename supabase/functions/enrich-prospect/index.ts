@@ -120,8 +120,9 @@ Be specific and actionable. If you can't determine something with confidence, sa
     );
   } catch (error) {
     console.error('Error in enrich-prospect:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

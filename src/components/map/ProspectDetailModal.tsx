@@ -7,7 +7,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/integrations/supabase/client';
-import type { MapSearchResult, Prospect, AIEnrichment } from '@/types';
+import type { Json } from '@/integrations/supabase/types';
+import type { MapSearchResult, AIEnrichment } from '@/types';
 import { 
   Globe, 
   Phone, 
@@ -108,7 +109,7 @@ export function ProspectDetailModal({
         // Cache the enrichment
         await supabase
           .from('prospects')
-          .upsert({
+          .upsert([{
             place_id: prospect.place_id,
             name: prospect.name,
             address: prospect.address,
@@ -116,9 +117,9 @@ export function ProspectDetailModal({
             lng: prospect.lng,
             website_url: prospect.website,
             phone: prospect.phone,
-            ai_enrichment_json: data.enrichment,
+            ai_enrichment_json: data.enrichment as Json,
             enriched_at: new Date().toISOString(),
-          }, { onConflict: 'place_id' });
+          }], { onConflict: 'place_id' });
           
       } catch (error) {
         console.error('Error fetching enrichment:', error);
@@ -144,7 +145,7 @@ export function ProspectDetailModal({
       // First ensure the prospect exists
       const { data: prospectData, error: prospectError } = await supabase
         .from('prospects')
-        .upsert({
+        .upsert([{
           place_id: prospect.place_id,
           name: prospect.name,
           address: prospect.address,
@@ -152,8 +153,8 @@ export function ProspectDetailModal({
           lng: prospect.lng,
           website_url: prospect.website,
           phone: prospect.phone,
-          ai_enrichment_json: enrichment,
-        }, { onConflict: 'place_id' })
+          ai_enrichment_json: enrichment as Json,
+        }], { onConflict: 'place_id' })
         .select()
         .single();
 
