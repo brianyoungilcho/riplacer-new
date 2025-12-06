@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { OnboardingHeader } from './OnboardingHeader';
 import { StepWhatYouSell } from './StepWhatYouSell';
 import { StepWhereYouSell } from './StepWhereYouSell';
@@ -9,6 +10,7 @@ import { StepCompetitors } from './StepCompetitors';
 import { StepResults } from './StepResults';
 import { Crosshair } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export interface OnboardingData {
   // Step 1
@@ -43,9 +45,29 @@ const initialData: OnboardingData = {
 
 export function OnboardingPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [step, setStep] = useState(1);
   const [data, setData] = useState<OnboardingData>(initialData);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load saved progress from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('riplacer_onboarding_progress');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setData(parsed.data || initialData);
+        setStep(parsed.step || 1);
+      } catch (e) {
+        console.error('Failed to parse saved onboarding progress:', e);
+      }
+    }
+  }, []);
+
+  // Save progress to localStorage on data/step change
+  useEffect(() => {
+    localStorage.setItem('riplacer_onboarding_progress', JSON.stringify({ data, step }));
+  }, [data, step]);
 
   const updateData = useCallback((updates: Partial<OnboardingData>) => {
     setData(prev => ({ ...prev, ...updates }));
@@ -59,11 +81,116 @@ export function OnboardingPage() {
     setStep(prev => Math.max(prev - 1, 1));
   }, []);
 
-  const handleComplete = useCallback(() => {
-    // Save to localStorage for now
-    localStorage.setItem('riplacer_onboarding', JSON.stringify(data));
-    navigate('/discover');
-  }, [data, navigate]);
+  const handleComplete = useCallback(async () => {
+    setIsSaving(true);
+    
+    try {
+      // Save to localStorage first
+      localStorage.setItem('riplacer_onboarding', JSON.stringify(data));
+      localStorage.removeItem('riplacer_onboarding_progress'); // Clear progress
+      
+      // If user is logged in, save to database
+      if (user) {
+        // Save profile data
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            product_description: data.productDescription,
+            competitor_names: data.competitors,
+            onboarding_complete: true,
+            onboarding_data: data as any,
+          })
+          .eq('id', user.id);
+
+        if (profileError) {
+          console.error('Failed to save profile:', profileError);
+          toast.error('Failed to save profile data');
+        }
+
+        // Save territory data
+        const { error: territoryError } = await supabase
+          .from('user_territories')
+          .upsert({
+            user_id: user.id,
+            region: data.region || null,
+            states: data.states,
+            cities: data.cities,
+            description: data.territoryDescription || null,
+          }, {
+            onConflict: 'user_id',
+          });
+
+        if (territoryError) {
+          console.error('Failed to save territory:', territoryError);
+        }
+
+        // Save categories
+        if (data.targetCategories.length > 0) {
+          // First delete existing categories
+          await supabase
+            .from('user_categories')
+            .delete()
+            .eq('user_id', user.id);
+
+          // Then insert new ones
+          const categoryInserts = data.targetCategories.map(cat => ({
+            user_id: user.id,
+            category_id: cat,
+            category_name: cat,
+          }));
+
+          const { error: categoryError } = await supabase
+            .from('user_categories')
+            .insert(categoryInserts);
+
+          if (categoryError) {
+            console.error('Failed to save categories:', categoryError);
+          }
+        }
+
+        // Save competitors
+        if (data.competitors.length > 0) {
+          // First delete existing competitors
+          await supabase
+            .from('user_competitors')
+            .delete()
+            .eq('user_id', user.id);
+
+          // Then insert new ones
+          const competitorInserts = data.competitors.map(comp => ({
+            user_id: user.id,
+            competitor_name: comp,
+          }));
+
+          const { error: competitorError } = await supabase
+            .from('user_competitors')
+            .insert(competitorInserts);
+
+          if (competitorError) {
+            console.error('Failed to save competitors:', competitorError);
+          }
+        }
+
+        toast.success('Setup complete!');
+      }
+      
+      navigate('/discover');
+    } catch (error) {
+      console.error('Failed to complete onboarding:', error);
+      toast.error('Something went wrong. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [data, user, navigate]);
+
+  // Show loading state while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
 
   // Determine if we should show map (step 3+)
   const showMap = step >= 3;
@@ -183,6 +310,7 @@ export function OnboardingPage() {
                 updateData={updateData}
                 onComplete={handleComplete}
                 onBack={prevStep}
+                isSaving={isSaving}
               />
             )}
           </div>
@@ -215,6 +343,11 @@ function MapPlaceholder({ data, step }: { data: OnboardingData; step: number }) 
         <div className="text-center text-gray-500">
           <p className="text-lg font-medium mb-2">Map Interface</p>
           <p className="text-sm">Territory visualization will appear here</p>
+          {data.states.length > 0 && (
+            <p className="text-sm mt-2 text-gray-700">
+              Selected: {data.states.join(', ')}
+            </p>
+          )}
         </div>
       </div>
 
@@ -252,4 +385,3 @@ function ProspectMarker({ name, className }: { name: string; className?: string 
 }
 
 export default OnboardingPage;
-

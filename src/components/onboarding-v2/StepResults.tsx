@@ -10,6 +10,7 @@ interface StepResultsProps {
   updateData: (updates: Partial<OnboardingData>) => void;
   onComplete: () => void;
   onBack: () => void;
+  isSaving?: boolean;
 }
 
 // Mock prospect data
@@ -71,7 +72,7 @@ const MOCK_PROSPECTS: Prospect[] = [
   },
 ];
 
-export function StepResults({ data, onComplete, onBack }: StepResultsProps) {
+export function StepResults({ data, onComplete, onBack, isSaving }: StepResultsProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [userNotes, setUserNotes] = useState<Record<string, string>>({});
@@ -257,9 +258,10 @@ export function StepResults({ data, onComplete, onBack }: StepResultsProps) {
             )}
             <Button
               onClick={onComplete}
+              disabled={isSaving}
               className="h-12 px-8 text-base font-medium rounded-xl"
             >
-              {favorites.size > 0 ? 'Continue to Dashboard' : 'Skip for Now'}
+              {isSaving ? 'Saving...' : favorites.size > 0 ? 'Continue to Dashboard' : 'Skip for Now'}
             </Button>
           </div>
         </div>
