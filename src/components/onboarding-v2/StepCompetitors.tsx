@@ -1,0 +1,208 @@
+import { useState } from 'react';
+import { OnboardingData } from './OnboardingPage';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+import { Check, Plus, X } from 'lucide-react';
+
+interface StepCompetitorsProps {
+  data: OnboardingData;
+  updateData: (updates: Partial<OnboardingData>) => void;
+  onNext: () => void;
+  onBack: () => void;
+}
+
+// Common competitors based on industry (would be dynamically populated in real app)
+const SUGGESTED_COMPETITORS: Record<string, string[]> = {
+  'police': ['Axon', 'Motorola Solutions', 'ShotSpotter', 'Flock Safety', 'NICE', 'Genetec'],
+  'fire': ['Pierce Manufacturing', 'E-ONE', 'Rosenbauer', 'Spartan Motors', 'ESO Solutions'],
+  'schools_k12': ['PowerSchool', 'Infinite Campus', 'Skyward', 'Blackboard', 'Instructure'],
+  'higher_ed': ['Ellucian', 'Oracle', 'Workday', 'Blackbaud', 'Campus Management'],
+  'transit': ['Trapeze', 'Clever Devices', 'Cubic', 'Conduent', 'GMV'],
+  'default': ['Competitor A', 'Competitor B', 'Competitor C'],
+};
+
+export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompetitorsProps) {
+  const [selectedCompetitors, setSelectedCompetitors] = useState<string[]>(data.competitors);
+  const [customCompetitor, setCustomCompetitor] = useState('');
+
+  // Get suggested competitors based on selected categories
+  const getSuggestedCompetitors = (): string[] => {
+    const competitors = new Set<string>();
+    
+    data.targetCategories.forEach(category => {
+      const categoryCompetitors = SUGGESTED_COMPETITORS[category] || [];
+      categoryCompetitors.forEach(c => competitors.add(c));
+    });
+
+    if (competitors.size === 0) {
+      SUGGESTED_COMPETITORS['default'].forEach(c => competitors.add(c));
+    }
+
+    return Array.from(competitors).sort();
+  };
+
+  const suggestedCompetitors = getSuggestedCompetitors();
+
+  const handleCompetitorToggle = (competitor: string) => {
+    setSelectedCompetitors(prev => 
+      prev.includes(competitor) 
+        ? prev.filter(c => c !== competitor)
+        : [...prev, competitor]
+    );
+  };
+
+  const handleAddCustom = () => {
+    if (customCompetitor.trim() && !selectedCompetitors.includes(customCompetitor.trim())) {
+      setSelectedCompetitors(prev => [...prev, customCompetitor.trim()]);
+      setCustomCompetitor('');
+    }
+  };
+
+  const handleRemoveCompetitor = (competitor: string) => {
+    setSelectedCompetitors(prev => prev.filter(c => c !== competitor));
+  };
+
+  const handleContinue = () => {
+    // Add competitor-based filters
+    const competitorFilters = selectedCompetitors.map(c => `Uses ${c}`);
+    
+    updateData({
+      competitors: selectedCompetitors,
+      filters: [...data.filters, ...competitorFilters.slice(0, 2)], // Only add first 2 to filters
+    });
+    onNext();
+  };
+
+  const canContinue = selectedCompetitors.length > 0;
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Filter Pills - Show all accumulated selections */}
+      <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <div className="flex flex-wrap gap-2">
+          {data.filters.map((filter, idx) => (
+            <span 
+              key={idx}
+              className="px-3 py-1.5 bg-white rounded-full text-sm border border-gray-200"
+            >
+              {filter}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-lg mx-auto">
+          {/* Title */}
+          <h1 className="text-3xl font-bold text-gray-900 mb-3">
+            Who are your competitors?
+          </h1>
+          
+          <p className="text-gray-600 mb-6">
+            Select competitors you want to displace. We'll find accounts using their products.
+          </p>
+
+          {/* Selected Competitors */}
+          {selectedCompetitors.length > 0 && (
+            <div className="mb-6">
+              <label className="text-sm font-medium text-gray-700 mb-2 block">
+                Selected ({selectedCompetitors.length})
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {selectedCompetitors.map(competitor => (
+                  <span 
+                    key={competitor}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-full text-sm"
+                  >
+                    {competitor}
+                    <button 
+                      onClick={() => handleRemoveCompetitor(competitor)}
+                      className="w-4 h-4 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Add Custom */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">
+              Add competitor
+            </label>
+            <div className="flex gap-2">
+              <Input
+                value={customCompetitor}
+                onChange={(e) => setCustomCompetitor(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
+                placeholder="Enter competitor name..."
+                className="flex-1 h-11 rounded-xl border-gray-300"
+              />
+              <Button
+                onClick={handleAddCustom}
+                disabled={!customCompetitor.trim()}
+                variant="outline"
+                className="h-11 px-4 rounded-xl"
+              >
+                <Plus className="w-5 h-5" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Suggested Competitors */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">
+              Suggested competitors
+            </label>
+            <div className="space-y-2">
+              {suggestedCompetitors.map(competitor => (
+                <button
+                  key={competitor}
+                  onClick={() => handleCompetitorToggle(competitor)}
+                  className={cn(
+                    "w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between",
+                    selectedCompetitors.includes(competitor)
+                      ? "border-gray-900 bg-gray-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  )}
+                >
+                  <span className="font-medium text-gray-900">{competitor}</span>
+                  {selectedCompetitors.includes(competitor) && (
+                    <div className="w-5 h-5 rounded-full bg-gray-900 flex items-center justify-center">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="p-6 border-t border-gray-200 bg-white">
+        <div className="max-w-lg mx-auto flex gap-3">
+          <Button
+            onClick={onBack}
+            variant="outline"
+            className="flex-1 h-12 text-base font-medium rounded-xl"
+          >
+            Back
+          </Button>
+          <Button
+            onClick={handleContinue}
+            disabled={!canContinue}
+            className="flex-1 h-12 text-base font-medium rounded-xl"
+          >
+            Find Prospects
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

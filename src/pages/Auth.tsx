@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Zap, Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import { Crosshair, Mail, Lock, ArrowRight, Loader2, ArrowLeft } from 'lucide-react';
 import { z } from 'zod';
 
 const authSchema = z.object({
@@ -94,65 +94,89 @@ export default function Auth() {
     }
   };
 
+  // Extract company domain from email for display
+  const emailDomain = email.includes('@') ? email.split('@')[1] : null;
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      {/* Background glow effect */}
-      <div className="fixed inset-0 gradient-glow pointer-events-none" />
-      
-      <Card className="w-full max-w-md glass border-border/50 animate-fade-in-up">
-        <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center shadow-glow">
-            <Zap className="w-8 h-8 text-primary-foreground" />
+    <div className="min-h-screen flex bg-white">
+      {/* Left side - Form */}
+      <div className="flex-1 flex flex-col justify-center px-8 py-12 lg:px-16">
+        <div className="w-full max-w-md mx-auto">
+          {/* Back to home */}
+          <Link 
+            to="/" 
+            className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors mb-8"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to home
+          </Link>
+
+          {/* Logo */}
+          <div className="flex items-center gap-2.5 mb-10">
+            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+              <Crosshair className="w-5 h-5 text-white" strokeWidth={2.5} />
+            </div>
+            <span className="font-bold text-2xl tracking-tight text-gray-900">Riplacer</span>
           </div>
-          <div>
-            <CardTitle className="text-2xl font-bold">
-              {isSignUp ? 'Create your account' : 'Welcome back'}
-            </CardTitle>
-            <CardDescription className="mt-2">
+
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              {isSignUp ? 'Start winning deals' : 'Welcome back'}
+            </h1>
+            <p className="text-gray-600">
               {isSignUp 
-                ? 'Start finding rip & replace opportunities' 
-                : 'Sign in to continue to Riplacer'}
-            </CardDescription>
+                ? 'Create your account to find rip & replace opportunities' 
+                : 'Sign in to continue hunting your competition'}
+            </p>
           </div>
-        </CardHeader>
-        
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-gray-700 font-medium">
+                Work Email
+              </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <Input
                   id="email"
                   type="email"
                   placeholder="you@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
+                  className="pl-11 h-12 text-base border-gray-200 focus:border-primary focus:ring-primary"
                   required
                 />
               </div>
               {errors.email && (
-                <p className="text-sm text-destructive">{errors.email}</p>
+                <p className="text-sm text-red-600">{errors.email}</p>
+              )}
+              {isSignUp && emailDomain && !errors.email && (
+                <p className="text-sm text-gray-500">
+                  We'll analyze <span className="font-medium text-gray-700">{emailDomain}</span> to understand what you sell
+                </p>
               )}
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-gray-700 font-medium">
+                Password
+              </Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <Input
                   id="password"
                   type="password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10"
+                  className="pl-11 h-12 text-base border-gray-200 focus:border-primary focus:ring-primary"
                   required
                 />
               </div>
               {errors.password && (
-                <p className="text-sm text-destructive">{errors.password}</p>
+                <p className="text-sm text-red-600">{errors.password}</p>
               )}
             </div>
 
@@ -160,36 +184,67 @@ export default function Auth() {
               type="submit" 
               variant="glow" 
               size="lg" 
-              className="w-full"
+              className="w-full h-12 text-base"
               disabled={loading}
             >
               {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>
                   {isSignUp ? 'Create Account' : 'Sign In'}
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-5 h-5" />
                 </>
               )}
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
+          {/* Toggle sign up/in */}
+          <div className="mt-8 text-center">
             <button
               type="button"
               onClick={() => {
                 setIsSignUp(!isSignUp);
                 setErrors({});
               }}
-              className="text-sm text-muted-foreground hover:text-primary transition-colors"
+              className="text-sm text-gray-600 hover:text-primary transition-colors"
             >
               {isSignUp 
                 ? 'Already have an account? Sign in' 
                 : "Don't have an account? Sign up"}
             </button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      {/* Right side - Visual */}
+      <div className="hidden lg:flex flex-1 bg-gray-900 relative overflow-hidden">
+        {/* Red glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/30 blur-[150px] rounded-full" />
+        
+        {/* Content */}
+        <div className="relative z-10 flex flex-col justify-center px-16">
+          <blockquote className="text-3xl font-bold text-white leading-tight mb-6">
+            "Make your competitors<br />
+            <span className="text-primary">uncomfortable.</span>"
+          </blockquote>
+          <p className="text-gray-400 text-lg max-w-md">
+            Riplacer helps aggressive sales reps find and win accounts from their competition. 
+            No more cold calling blind.
+          </p>
+
+          {/* Stats */}
+          <div className="flex gap-12 mt-12">
+            <div>
+              <div className="text-4xl font-black text-white">5min</div>
+              <div className="text-sm text-gray-500">to first prospect</div>
+            </div>
+            <div>
+              <div className="text-4xl font-black text-primary">100%</div>
+              <div className="text-sm text-gray-500">public data</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

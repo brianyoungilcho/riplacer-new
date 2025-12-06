@@ -6,8 +6,10 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import OnboardingV2 from "./pages/OnboardingV2";
 import Discover from "./pages/Discover";
 import Targets from "./pages/Targets";
+import Favorites from "./pages/Favorites";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -23,8 +25,11 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/start" element={<OnboardingV2 />} />
+            <Route path="/onboarding" element={<OnboardingV2 />} />
             <Route path="/discover" element={<Discover />} />
             <Route path="/targets" element={<Targets />} />
+            <Route path="/favorites" element={<Favorites />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

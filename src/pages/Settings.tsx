@@ -3,15 +3,11 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useProfile } from '@/hooks/useProfile';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  Settings as SettingsIcon, 
-  Building2, 
-  Target, 
   Loader2, 
   Check,
   X,
@@ -29,12 +25,21 @@ export default function Settings() {
   const [newCompetitor, setNewCompetitor] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Territory from localStorage
+  const [territory, setTerritory] = useState<{ state: string; city: string } | null>(null);
+
   useEffect(() => {
     if (profile) {
       setCompanyName(profile.company_name || '');
       setCompanyWebsite(profile.company_website || '');
       setSellingProposition(profile.selling_proposition || '');
       setCompetitors(profile.competitor_names || []);
+    }
+
+    // Load territory
+    const savedTerritory = localStorage.getItem('riplacer_territory');
+    if (savedTerritory) {
+      setTerritory(JSON.parse(savedTerritory));
     }
   }, [profile]);
 
@@ -81,8 +86,8 @@ export default function Settings() {
   if (profileLoading) {
     return (
       <AppLayout>
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        <div className="flex-1 flex items-center justify-center bg-gray-950">
+          <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
         </div>
       </AppLayout>
     );
@@ -90,92 +95,113 @@ export default function Settings() {
 
   return (
     <AppLayout>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto bg-gray-950">
         {/* Header */}
-        <header className="h-16 border-b border-border flex items-center px-6">
-          <div className="flex items-center gap-3">
-            <SettingsIcon className="w-5 h-5 text-primary" />
-            <h1 className="text-lg font-semibold">Settings</h1>
-          </div>
+        <header className="h-16 border-b border-gray-800 flex items-center px-6 bg-gray-900">
+          <h1 className="text-lg font-semibold text-white">Settings</h1>
         </header>
 
         <div className="p-6 max-w-2xl space-y-6">
           {/* Company Info */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-primary" />
-                <CardTitle>Company Information</CardTitle>
-              </div>
-              <CardDescription>
+          <div className="rounded-xl bg-gray-900 border border-gray-800 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-800">
+              <h2 className="font-semibold text-white">Company Information</h2>
+              <p className="text-sm text-gray-400 mt-1">
                 This information helps us find the best rip & replace opportunities for you.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="company-name">Company Name</Label>
+                <Label htmlFor="company-name" className="text-gray-300">Company Name</Label>
                 <Input
                   id="company-name"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   placeholder="Your Company Inc."
+                  className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="company-website">Website</Label>
+                <Label htmlFor="company-website" className="text-gray-300">Website</Label>
                 <Input
                   id="company-website"
                   type="url"
                   value={companyWebsite}
                   onChange={(e) => setCompanyWebsite(e.target.value)}
                   placeholder="https://yourcompany.com"
+                  className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="selling-proposition">What You Sell</Label>
+                <Label htmlFor="selling-proposition" className="text-gray-300">What You Sell</Label>
                 <Textarea
                   id="selling-proposition"
                   value={sellingProposition}
                   onChange={(e) => setSellingProposition(e.target.value)}
                   placeholder="Describe what your company sells in 1-2 sentences..."
-                  className="min-h-[80px]"
+                  className="min-h-[80px] bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
                 />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+
+          {/* Territory */}
+          <div className="rounded-xl bg-gray-900 border border-gray-800 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-800">
+              <h2 className="font-semibold text-white">Territory</h2>
+              <p className="text-sm text-gray-400 mt-1">
+                Your assigned sales territory for prospecting.
+              </p>
+            </div>
+            <div className="p-6">
+              {territory ? (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-white font-medium">
+                      {territory.city ? `${territory.city}, ${territory.state}` : territory.state}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Change territory by re-running onboarding
+                    </p>
+                  </div>
+                  <Badge className="bg-gray-800 text-gray-300">
+                    Active
+                  </Badge>
+                </div>
+              ) : (
+                <p className="text-gray-400">No territory set. Complete onboarding to set your territory.</p>
+              )}
+            </div>
+          </div>
 
           {/* Competitors */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Target className="w-5 h-5 text-primary" />
-                <CardTitle>Competitors</CardTitle>
-              </div>
-              <CardDescription>
+          <div className="rounded-xl bg-gray-900 border border-gray-800 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-800">
+              <h2 className="font-semibold text-white">Competitors</h2>
+              <p className="text-sm text-gray-400 mt-1">
                 Who are you trying to rip and replace? We'll look for their presence at prospects.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
               <div className="flex flex-wrap gap-2 min-h-[40px]">
                 {competitors.map((competitor, index) => (
                   <Badge 
                     key={index} 
-                    variant="secondary"
-                    className="flex items-center gap-1 pr-1 h-8"
+                    className="flex items-center gap-1 pr-1 h-8 bg-gray-800 text-gray-200"
                   >
                     {competitor}
                     <button
                       onClick={() => removeCompetitor(index)}
-                      className="ml-1 hover:bg-destructive/20 rounded-full p-0.5"
+                      className="ml-1 hover:bg-red-500/20 hover:text-red-400 rounded-full p-0.5 transition-colors"
                     >
                       <X className="w-3 h-3" />
                     </button>
                   </Badge>
                 ))}
                 {competitors.length === 0 && (
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-sm text-gray-500">
                     No competitors added yet
                   </span>
                 )}
@@ -186,6 +212,7 @@ export default function Settings() {
                   value={newCompetitor}
                   onChange={(e) => setNewCompetitor(e.target.value)}
                   placeholder="Add a competitor..."
+                  className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -198,12 +225,13 @@ export default function Settings() {
                   size="icon"
                   onClick={addCompetitor}
                   disabled={!newCompetitor.trim()}
+                  className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
                 >
                   <Plus className="w-4 h-4" />
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Save Button */}
           <div className="flex justify-end">
