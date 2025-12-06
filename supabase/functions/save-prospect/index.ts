@@ -39,6 +39,8 @@ serve(async (req) => {
 
     console.log('Saving prospect for user:', user.id, 'place_id:', place_id);
 
+    const enrichment = prospect_data?.enrichment || {};
+
     // First, upsert the prospect into the prospects table
     const { data: prospect, error: prospectError } = await supabase
       .from('prospects')
@@ -50,8 +52,15 @@ serve(async (req) => {
         lng: prospect_data?.lng,
         phone: prospect_data?.phone,
         website_url: prospect_data?.website_url,
-        ai_enrichment_json: prospect_data?.enrichment || null,
-        enriched_at: prospect_data?.enrichment ? new Date().toISOString() : null,
+        ai_enrichment_json: enrichment,
+        riplace_score: enrichment?.riplace_score || 0,
+        contract_value: enrichment?.contract_value || null,
+        highlight: enrichment?.highlight || null,
+        highlight_type: enrichment?.highlight_type || null,
+        riplace_angle: enrichment?.riplace_angle || null,
+        sources: enrichment?.sources || [],
+        decision_maker: enrichment?.decision_maker || null,
+        enriched_at: Object.keys(enrichment).length > 0 ? new Date().toISOString() : null,
       }, {
         onConflict: 'place_id'
       })

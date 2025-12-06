@@ -22,6 +22,8 @@ export type Database = {
           created_at: string | null
           id: string
           onboarding_complete: boolean | null
+          onboarding_data: Json | null
+          product_description: string | null
           selling_proposition: string | null
           updated_at: string | null
         }
@@ -32,6 +34,8 @@ export type Database = {
           created_at?: string | null
           id: string
           onboarding_complete?: boolean | null
+          onboarding_data?: Json | null
+          product_description?: string | null
           selling_proposition?: string | null
           updated_at?: string | null
         }
@@ -42,6 +46,8 @@ export type Database = {
           created_at?: string | null
           id?: string
           onboarding_complete?: boolean | null
+          onboarding_data?: Json | null
+          product_description?: string | null
           selling_proposition?: string | null
           updated_at?: string | null
         }
@@ -51,42 +57,63 @@ export type Database = {
         Row: {
           address: string | null
           ai_enrichment_json: Json | null
+          contract_value: string | null
           created_at: string | null
+          decision_maker: string | null
           enriched_at: string | null
+          highlight: string | null
+          highlight_type: string | null
           id: string
           lat: number | null
           lng: number | null
           name: string
           phone: string | null
           place_id: string | null
+          riplace_angle: string | null
+          riplace_score: number | null
+          sources: Json | null
           updated_at: string | null
           website_url: string | null
         }
         Insert: {
           address?: string | null
           ai_enrichment_json?: Json | null
+          contract_value?: string | null
           created_at?: string | null
+          decision_maker?: string | null
           enriched_at?: string | null
+          highlight?: string | null
+          highlight_type?: string | null
           id?: string
           lat?: number | null
           lng?: number | null
           name: string
           phone?: string | null
           place_id?: string | null
+          riplace_angle?: string | null
+          riplace_score?: number | null
+          sources?: Json | null
           updated_at?: string | null
           website_url?: string | null
         }
         Update: {
           address?: string | null
           ai_enrichment_json?: Json | null
+          contract_value?: string | null
           created_at?: string | null
+          decision_maker?: string | null
           enriched_at?: string | null
+          highlight?: string | null
+          highlight_type?: string | null
           id?: string
           lat?: number | null
           lng?: number | null
           name?: string
           phone?: string | null
           place_id?: string | null
+          riplace_angle?: string | null
+          riplace_score?: number | null
+          sources?: Json | null
           updated_at?: string | null
           website_url?: string | null
         }
