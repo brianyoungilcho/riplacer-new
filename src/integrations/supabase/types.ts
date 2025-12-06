@@ -92,6 +92,54 @@ export type Database = {
         }
         Relationships: []
       }
+      user_categories: {
+        Row: {
+          category_id: string
+          category_name: string
+          created_at: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          category_id: string
+          category_name: string
+          created_at?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          category_id?: string
+          category_name?: string
+          created_at?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_competitors: {
+        Row: {
+          category_id: string | null
+          competitor_name: string
+          created_at: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          category_id?: string | null
+          competitor_name: string
+          created_at?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          category_id?: string | null
+          competitor_name?: string
+          created_at?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_leads: {
         Row: {
           ai_hook: string | null
@@ -132,6 +180,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_territories: {
+        Row: {
+          cities: Json | null
+          created_at: string | null
+          description: string | null
+          id: string
+          region: string | null
+          states: Json | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          cities?: Json | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          region?: string | null
+          states?: Json | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          cities?: Json | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          region?: string | null
+          states?: Json | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {

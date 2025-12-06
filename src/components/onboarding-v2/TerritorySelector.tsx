@@ -5,12 +5,19 @@ import { Check } from 'lucide-react';
 import { US_REGIONS, CITIES_BY_STATE, type USRegion } from '@/data/us-regions';
 import { cn } from '@/lib/utils';
 
-interface Territory {
+export interface Territory {
   regions: string[];
   states: string[];
   cities: string[];
   description?: string;
 }
+
+const createEmptyTerritory = (): Territory => ({
+  regions: [],
+  states: [],
+  cities: [],
+  description: undefined,
+});
 
 interface TerritorySelectorProps {
   territory: Territory;
@@ -23,82 +30,90 @@ export function TerritorySelector({ territory, onChange }: TerritorySelectorProp
   const [activeTab, setActiveTab] = useState<TabType>('region');
   const [showDescription, setShowDescription] = useState(false);
 
+  // Ensure arrays are properly typed
+  const regions: string[] = territory.regions ?? [];
+  const states: string[] = territory.states ?? [];
+  const cities: string[] = territory.cities ?? [];
+
   const allStates = Object.values(US_REGIONS).flatMap(r => r.states).sort();
   
   // Get cities for selected states
-  const availableCities = territory.states
+  const availableCities = states
     .flatMap(state => CITIES_BY_STATE[state] || [])
     .sort();
 
   const toggleRegion = (region: string) => {
-    const regionStates = US_REGIONS[region as USRegion]?.states || [];
-    const isSelected = territory.regions.includes(region);
+    const regionData = US_REGIONS[region as USRegion];
+    const regionStates: string[] = regionData ? [...regionData.states] : [];
+    const isSelected = regions.includes(region);
     
     if (isSelected) {
       onChange({
         ...territory,
-        regions: territory.regions.filter(r => r !== region),
-        states: territory.states.filter(s => !regionStates.includes(s)),
-        cities: territory.cities.filter(c => {
+        regions: regions.filter(r => r !== region),
+        states: states.filter(s => !regionStates.includes(s)),
+        cities: cities.filter(c => {
           // Remove cities from deselected states
-          const cityState = territory.states.find(state => 
+          const cityState = states.find(state => 
             CITIES_BY_STATE[state]?.includes(c) && regionStates.includes(state)
           );
           return !cityState;
         }),
       });
     } else {
+      const newStates = [...new Set([...states, ...regionStates])];
       onChange({
         ...territory,
-        regions: [...territory.regions, region],
-        states: [...new Set([...territory.states, ...regionStates])],
+        regions: [...regions, region],
+        states: newStates,
       });
     }
   };
 
   const toggleState = (state: string) => {
-    const isSelected = territory.states.includes(state);
+    const isSelected = states.includes(state);
     
     if (isSelected) {
+      const newStates = states.filter(s => s !== state);
       onChange({
         ...territory,
-        states: territory.states.filter(s => s !== state),
-        cities: territory.cities.filter(c => !(CITIES_BY_STATE[state]?.includes(c))),
+        states: newStates,
+        cities: cities.filter(c => !(CITIES_BY_STATE[state]?.includes(c))),
         // Update regions if all states from a region are deselected
-        regions: territory.regions.filter(region => {
-          const regionStates = US_REGIONS[region as USRegion]?.states || [];
-          const remainingStates = territory.states.filter(s => s !== state);
-          return regionStates.some(rs => remainingStates.includes(rs));
+        regions: regions.filter(region => {
+          const regionData = US_REGIONS[region as USRegion];
+          const regionStates: string[] = regionData ? [...regionData.states] : [];
+          return regionStates.some(rs => newStates.includes(rs));
         }),
       });
     } else {
       // Find which region this state belongs to
       const parentRegion = Object.entries(US_REGIONS).find(([_, data]) => 
-        data.states.includes(state)
+        ([...data.states] as string[]).includes(state)
       )?.[0];
 
       onChange({
         ...territory,
-        states: [...territory.states, state],
-        regions: parentRegion && !territory.regions.includes(parentRegion) 
-          ? [...territory.regions, parentRegion]
-          : territory.regions,
+        states: [...states, state],
+        regions: parentRegion && !regions.includes(parentRegion) 
+          ? [...regions, parentRegion]
+          : regions,
       });
     }
   };
 
   const toggleCity = (city: string) => {
-    const isSelected = territory.cities.includes(city);
+    const isSelected = cities.includes(city);
     
     if (isSelected) {
       onChange({
         ...territory,
-        cities: territory.cities.filter(c => c !== city),
+        cities: cities.filter(c => c !== city),
       });
     } else {
       onChange({
         ...territory,
-        cities: [...territory.cities, city],
+        cities: [...cities, city],
       });
     }
   };
