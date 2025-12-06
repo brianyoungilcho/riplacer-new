@@ -14,7 +14,125 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          company_name: string | null
+          company_website: string | null
+          competitor_names: string[] | null
+          created_at: string | null
+          id: string
+          onboarding_complete: boolean | null
+          selling_proposition: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_name?: string | null
+          company_website?: string | null
+          competitor_names?: string[] | null
+          created_at?: string | null
+          id: string
+          onboarding_complete?: boolean | null
+          selling_proposition?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_name?: string | null
+          company_website?: string | null
+          competitor_names?: string[] | null
+          created_at?: string | null
+          id?: string
+          onboarding_complete?: boolean | null
+          selling_proposition?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      prospects: {
+        Row: {
+          address: string | null
+          ai_enrichment_json: Json | null
+          created_at: string | null
+          enriched_at: string | null
+          id: string
+          lat: number | null
+          lng: number | null
+          name: string
+          phone: string | null
+          place_id: string | null
+          updated_at: string | null
+          website_url: string | null
+        }
+        Insert: {
+          address?: string | null
+          ai_enrichment_json?: Json | null
+          created_at?: string | null
+          enriched_at?: string | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          name: string
+          phone?: string | null
+          place_id?: string | null
+          updated_at?: string | null
+          website_url?: string | null
+        }
+        Update: {
+          address?: string | null
+          ai_enrichment_json?: Json | null
+          created_at?: string | null
+          enriched_at?: string | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          name?: string
+          phone?: string | null
+          place_id?: string | null
+          updated_at?: string | null
+          website_url?: string | null
+        }
+        Relationships: []
+      }
+      user_leads: {
+        Row: {
+          ai_hook: string | null
+          created_at: string | null
+          id: string
+          notes: string | null
+          prospect_id: string
+          status: Database["public"]["Enums"]["lead_status"] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          ai_hook?: string | null
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          prospect_id: string
+          status?: Database["public"]["Enums"]["lead_status"] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          ai_hook?: string | null
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          prospect_id?: string
+          status?: Database["public"]["Enums"]["lead_status"] | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_leads_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +141,13 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      lead_status:
+        | "saved"
+        | "contacted"
+        | "meeting_booked"
+        | "won"
+        | "lost"
+        | "irrelevant"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +274,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      lead_status: [
+        "saved",
+        "contacted",
+        "meeting_booked",
+        "won",
+        "lost",
+        "irrelevant",
+      ],
+    },
   },
 } as const
