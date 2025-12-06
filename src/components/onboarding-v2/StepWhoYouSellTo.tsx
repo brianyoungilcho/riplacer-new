@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { OnboardingData } from './OnboardingPage';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -30,6 +30,11 @@ const BUYER_CATEGORIES = [
 export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYouSellToProps) {
   const [selectedCategories, setSelectedCategories] = useState<string[]>(data.targetCategories);
 
+  // Sync with data prop
+  useEffect(() => {
+    setSelectedCategories(data.targetCategories);
+  }, []);
+
   const handleCategoryToggle = (categoryId: string) => {
     setSelectedCategories(prev => 
       prev.includes(categoryId) 
@@ -39,28 +44,38 @@ export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYo
   };
 
   const handleContinue = () => {
-    // Generate filter pills based on selections
-    const filters = selectedCategories.map(catId => {
+    // Get category labels for filters
+    const categoryFilters = selectedCategories.map(catId => {
       const category = BUYER_CATEGORIES.find(c => c.id === catId);
       return category?.label || catId;
     });
     
+    // Append to existing territory filters (don't duplicate)
+    const existingFilters = data.filters.filter(f => 
+      !BUYER_CATEGORIES.some(cat => cat.label === f)
+    );
+    
     updateData({
       targetCategories: selectedCategories,
-      filters: [...data.filters, ...filters],
+      filters: [...existingFilters, ...categoryFilters],
     });
     onNext();
   };
 
   const canContinue = selectedCategories.length > 0;
 
+  // Get existing territory filters to display
+  const territoryFilters = data.filters.filter(f => 
+    !BUYER_CATEGORIES.some(cat => cat.label === f)
+  );
+
   return (
     <div className="h-full flex flex-col">
-      {/* Filter Pills - Show previous selections */}
-      {data.filters.length > 0 && (
+      {/* Filter Pills - Show territory selections */}
+      {territoryFilters.length > 0 && (
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <div className="flex flex-wrap gap-2">
-            {data.filters.map((filter, idx) => (
+            {territoryFilters.map((filter, idx) => (
               <span 
                 key={idx}
                 className="px-3 py-1.5 bg-white rounded-full text-sm border border-gray-200"
@@ -81,7 +96,7 @@ export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYo
           </h1>
           
           <p className="text-gray-600 mb-8">
-            Tell us who your customers are.
+            Tell us who your customers are. Select all that apply.
           </p>
 
           {/* Category List */}
@@ -130,8 +145,12 @@ export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYo
             Continue
           </Button>
         </div>
+        {!canContinue && (
+          <p className="text-center text-sm text-gray-500 mt-3">
+            Select at least one buyer type to continue
+          </p>
+        )}
       </div>
     </div>
   );
 }
-

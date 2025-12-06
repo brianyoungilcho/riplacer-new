@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { OnboardingData } from './OnboardingPage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,16 +15,28 @@ interface StepCompetitorsProps {
 // Common competitors based on industry (would be dynamically populated in real app)
 const SUGGESTED_COMPETITORS: Record<string, string[]> = {
   'police': ['Axon', 'Motorola Solutions', 'ShotSpotter', 'Flock Safety', 'NICE', 'Genetec'],
+  'sheriff': ['Axon', 'Motorola Solutions', 'ShotSpotter', 'Flock Safety', 'NICE', 'Genetec'],
   'fire': ['Pierce Manufacturing', 'E-ONE', 'Rosenbauer', 'Spartan Motors', 'ESO Solutions'],
+  'ems': ['ESO Solutions', 'Zoll Medical', 'Stryker', 'ImageTrend'],
   'schools_k12': ['PowerSchool', 'Infinite Campus', 'Skyward', 'Blackboard', 'Instructure'],
   'higher_ed': ['Ellucian', 'Oracle', 'Workday', 'Blackbaud', 'Campus Management'],
   'transit': ['Trapeze', 'Clever Devices', 'Cubic', 'Conduent', 'GMV'],
+  'city_gov': ['Tyler Technologies', 'Accela', 'CentralSquare', 'OpenGov'],
+  'county_gov': ['Tyler Technologies', 'Accela', 'CentralSquare', 'OpenGov'],
+  'state_agency': ['Oracle', 'SAP', 'Deloitte', 'Accenture'],
+  'utilities': ['Oracle Utilities', 'SAP', 'Sensus', 'Itron'],
+  'hospitals': ['Epic', 'Cerner', 'MEDITECH', 'Allscripts'],
   'default': ['Competitor A', 'Competitor B', 'Competitor C'],
 };
 
 export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompetitorsProps) {
   const [selectedCompetitors, setSelectedCompetitors] = useState<string[]>(data.competitors);
   const [customCompetitor, setCustomCompetitor] = useState('');
+
+  // Sync with data prop
+  useEffect(() => {
+    setSelectedCompetitors(data.competitors);
+  }, []);
 
   // Get suggested competitors based on selected categories
   const getSuggestedCompetitors = (): string[] => {
@@ -64,33 +76,41 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
   };
 
   const handleContinue = () => {
-    // Add competitor-based filters
-    const competitorFilters = selectedCompetitors.map(c => `Uses ${c}`);
+    // Keep existing filters that aren't competitor-related
+    const existingFilters = data.filters.filter(f => !f.startsWith('Uses '));
+    
+    // Add competitor filters (only first 2 to keep it clean)
+    const competitorFilters = selectedCompetitors.slice(0, 2).map(c => `Uses ${c}`);
     
     updateData({
       competitors: selectedCompetitors,
-      filters: [...data.filters, ...competitorFilters.slice(0, 2)], // Only add first 2 to filters
+      filters: [...existingFilters, ...competitorFilters],
     });
     onNext();
   };
 
   const canContinue = selectedCompetitors.length > 0;
 
+  // Get existing non-competitor filters
+  const nonCompetitorFilters = data.filters.filter(f => !f.startsWith('Uses '));
+
   return (
     <div className="h-full flex flex-col">
       {/* Filter Pills - Show all accumulated selections */}
-      <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-        <div className="flex flex-wrap gap-2">
-          {data.filters.map((filter, idx) => (
-            <span 
-              key={idx}
-              className="px-3 py-1.5 bg-white rounded-full text-sm border border-gray-200"
-            >
-              {filter}
-            </span>
-          ))}
+      {nonCompetitorFilters.length > 0 && (
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex flex-wrap gap-2">
+            {nonCompetitorFilters.map((filter, idx) => (
+              <span 
+                key={idx}
+                className="px-3 py-1.5 bg-white rounded-full text-sm border border-gray-200"
+              >
+                {filter}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-8">
@@ -201,8 +221,12 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
             Find Prospects
           </Button>
         </div>
+        {!canContinue && (
+          <p className="text-center text-sm text-gray-500 mt-3">
+            Select at least one competitor to continue
+          </p>
+        )}
       </div>
     </div>
   );
 }
-

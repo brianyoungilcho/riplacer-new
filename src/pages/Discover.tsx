@@ -70,16 +70,39 @@ export default function Discover() {
 
   // Load territory from localStorage on mount
   useEffect(() => {
+    // Try new onboarding format first
+    const onboardingData = localStorage.getItem('riplacer_onboarding');
+    if (onboardingData) {
+      try {
+        const parsed = JSON.parse(onboardingData);
+        if (parsed.states?.length > 0 || parsed.cities?.length > 0) {
+          const location = parsed.cities?.[0] || parsed.states?.[0] || parsed.region;
+          if (location) {
+            toast({
+              title: 'Territory loaded',
+              description: `Ready to search in ${location}`,
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse onboarding data:', e);
+      }
+      return;
+    }
+
+    // Fallback to legacy format
     const territory = localStorage.getItem('riplacer_territory');
     if (territory) {
-      const { state, city } = JSON.parse(territory);
-      // In a real app, we'd geocode this to get coordinates
-      // For now, just show a toast indicating territory is loaded
-      if (state || city) {
-        toast({
-          title: 'Territory loaded',
-          description: `Searching in ${city ? `${city}, ` : ''}${state}`,
-        });
+      try {
+        const { state, city } = JSON.parse(territory);
+        if (state || city) {
+          toast({
+            title: 'Territory loaded',
+            description: `Searching in ${city ? `${city}, ` : ''}${state}`,
+          });
+        }
+      } catch (e) {
+        console.error('Failed to parse territory:', e);
       }
     }
   }, []);
