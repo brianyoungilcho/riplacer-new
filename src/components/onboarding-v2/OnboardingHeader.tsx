@@ -1,6 +1,8 @@
 import { OnboardingData } from './OnboardingPage';
 import { User } from '@supabase/supabase-js';
 import { User as UserIcon } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 
 // State abbreviations for compact display
 const STATE_ABBREV: Record<string, string> = {
@@ -20,50 +22,102 @@ interface OnboardingHeaderProps {
   data: OnboardingData;
   step: number;
   user: User | null;
+  onEditDomain?: () => void;
+  onEditTerritory?: () => void;
 }
 
-export function OnboardingHeader({ data, step, user }: OnboardingHeaderProps) {
+export function OnboardingHeader({ data, step, user, onEditDomain, onEditTerritory }: OnboardingHeaderProps) {
   // Only show territory info AFTER step 2 is completed (step >= 3)
   const showTerritoryPills = step >= 3 && (data.states.length > 0 || data.territoryDescription);
   
+  // Extract domain from productDescription or use companyDomain
+  const extractDomain = (): string | null => {
+    // First priority: use companyDomain if set
+    if (data.companyDomain) {
+      return data.companyDomain;
+    }
+    
+    // Second priority: extract from productDescription
+    if (data.productDescription) {
+      // Pattern: look for domain-like strings (e.g., "example.com" or "flocksafety.com - specifically alpr")
+      // Match domains like: example.com, example.co.uk, subdomain.example.com
+      const domainPattern = /([a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})*)/;
+      const domainMatch = data.productDescription.match(domainPattern);
+      if (domainMatch) {
+        let domain = domainMatch[1].toLowerCase();
+        // Clean up: remove protocol, www, and any trailing path/text
+        domain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split(' ')[0];
+        return domain;
+      }
+    }
+    
+    return null;
+  };
+
+  const domain = extractDomain();
+  
+  // Debug: log domain extraction (remove in production)
+  if (process.env.NODE_ENV === 'development' && (data.companyDomain || data.productDescription)) {
+    console.log('🔍 Domain extraction debug:', {
+      'companyDomain': data.companyDomain || '(not set)',
+      'productDescription': data.productDescription || '(not set)',
+      'extracted domain': domain || '(not found)',
+      'will render button': !!domain
+    });
+  }
+  
   return (
-    <header className="h-14 border-b border-gray-200 bg-white px-6 flex items-center justify-between">
-      {/* Left side - Product description */}
-      <div className="flex items-center gap-3">
+    <header className="h-14 border-b border-gray-200 bg-white px-6 flex items-center justify-between relative z-10">
+      {/* Left side - Product description (full, truncated) and Territory pills */}
+      <div className="flex items-center gap-3 min-w-0 flex-1">
         {data.productDescription && (
-          <div className="px-4 py-1.5 bg-gray-100 rounded-lg text-sm text-gray-700">
+          <button
+            onClick={() => onEditDomain?.()}
+            className="px-3 py-1.5 bg-gray-100 rounded-lg text-sm text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer truncate max-w-md"
+            title={data.productDescription}
+          >
             {data.productDescription.length > 50 
               ? data.productDescription.slice(0, 50) + '...' 
               : data.productDescription}
-          </div>
+          </button>
         )}
 
         {/* Territory pills - only show after step 2 is done */}
         {showTerritoryPills && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {data.states.slice(0, 5).map(state => (
-              <span 
-                key={state} 
-                className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-600"
+              <button
+                key={state}
+                onClick={() => onEditTerritory?.()}
+                className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+                title="Click to edit territory"
               >
                 {STATE_ABBREV[state] || state}
-              </span>
+              </button>
             ))}
             {data.states.length > 5 && (
-              <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-500">
+              <button
+                onClick={() => onEditTerritory?.()}
+                className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-500 hover:bg-gray-200 transition-colors cursor-pointer"
+                title="Click to edit territory"
+              >
                 +{data.states.length - 5}
-              </span>
+              </button>
             )}
           </div>
         )}
       </div>
 
-      {/* Right side - Company domain & profile */}
-      <div className="flex items-center gap-3">
-        {data.companyDomain && (
-          <div className="px-3 py-1.5 bg-gray-100 rounded-lg text-sm text-gray-600">
-            {data.companyDomain}
-          </div>
+      {/* Right side - Domain and Profile/Sign up */}
+      <div className="flex items-center gap-3 flex-shrink-0">
+        {domain && (
+          <button
+            onClick={() => onEditDomain?.()}
+            className="px-3 py-1.5 bg-gray-100 rounded-lg text-sm text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+            title="Click to edit domain"
+          >
+            {domain}
+          </button>
         )}
         
         {user ? (
@@ -79,9 +133,15 @@ export function OnboardingHeader({ data, step, user }: OnboardingHeaderProps) {
             )}
           </div>
         ) : (
-          <div className="w-8 h-8 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center">
-            <UserIcon className="w-4 h-4 text-gray-400" />
-          </div>
+          <Link to="/auth">
+            <Button 
+              size="sm" 
+              variant="outline"
+              className="h-8 px-3 text-sm"
+            >
+              Sign up
+            </Button>
+          </Link>
         )}
       </div>
     </header>

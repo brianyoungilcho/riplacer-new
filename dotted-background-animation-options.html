@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dotted Background Animation Options</title>
+  <style>
+    :root {
+      --dot-pattern: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      display: flex;
+      min-height: 100vh;
+      justify-content: center;
+      align-items: center;
+      padding: 32px;
+    }
+
+    .card {
+      width: min(1100px, 100%);
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      box-shadow: 0 15px 50px rgba(15, 23, 42, 0.08);
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      margin: 4px 0 0;
+      color: #475569;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .option {
+      padding: 10px 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      background: #f8fafc;
+      cursor: pointer;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 150ms ease;
+    }
+
+    .option input {
+      accent-color: #2563eb;
+    }
+
+    .option:hover {
+      border-color: #cbd5e1;
+      box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .demo-wrapper {
+      position: relative;
+      height: 520px;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      overflow: hidden;
+    }
+
+    .demo-content {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      z-index: 2;
+      text-align: center;
+      padding: 32px;
+      pointer-events: none;
+    }
+
+    .demo-content h2 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+
+    .demo-content p {
+      margin: 0;
+      color: #475569;
+      max-width: 640px;
+      line-height: 1.6;
+    }
+
+    /* Base dotted layer (subtle opacity) */
+    .dots-layer {
+      position: absolute;
+      inset: 0;
+      background-image: var(--dot-pattern);
+      background-repeat: repeat;
+      opacity: 0.03;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Option: Gentle Float (larger travel for visibility) */
+    .option-gentle-float {
+      animation: gentle-float 20s ease-in-out infinite;
+    }
+
+    @keyframes gentle-float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-18px); }
+    }
+
+    /* Option: Soft Pulse (subtle breathing) */
+    .option-soft-pulse {
+      animation: soft-pulse 8s ease-in-out infinite;
+    }
+
+    @keyframes soft-pulse {
+      0%, 100% { opacity: 0.022; }
+      50% { opacity: 0.05; }
+    }
+
+    /* Option: Diagonal Drift (longer glide) */
+    .option-diagonal-drift {
+      animation: diagonal-drift 25s linear infinite;
+    }
+
+    @keyframes diagonal-drift {
+      0% { transform: translate(0, 0); }
+      100% { transform: translate(30px, -30px); }
+    }
+
+    /* Option: Subtle Scale Wave (slightly larger scale) */
+    .option-subtle-scale {
+      animation: subtle-scale 15s ease-in-out infinite;
+    }
+
+    @keyframes subtle-scale {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+
+    /* Option: Layered Movement */
+    .layered {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .layered .layer-1,
+    .layered .layer-2 {
+      position: absolute;
+      inset: 0;
+      background-image: var(--dot-pattern);
+      background-repeat: repeat;
+    }
+
+    .layered .layer-1 {
+      opacity: 0.02;
+      animation: slow-left 30s linear infinite;
+    }
+
+    .layered .layer-2 {
+      opacity: 0.012;
+      animation: slow-right 35s linear infinite;
+    }
+
+    @keyframes slow-left {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-22px); }
+    }
+
+    @keyframes slow-right {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(22px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <div>
+        <p class="title">Dotted Background Animation Options</p>
+        <p class="subtitle">Pick an option to preview. All are intentionally slow, low opacity, and low movement to avoid distraction.</p>
+      </div>
+      <div class="controls">
+        <label class="option">
+          <input type="radio" name="mode" value="gentle-float" checked />
+          Gentle Float
+        </label>
+        <label class="option">
+          <input type="radio" name="mode" value="soft-pulse" />
+          Soft Pulse
+        </label>
+        <label class="option">
+          <input type="radio" name="mode" value="diagonal-drift" />
+          Diagonal Drift
+        </label>
+        <label class="option">
+          <input type="radio" name="mode" value="subtle-scale" />
+          Subtle Scale
+        </label>
+        <label class="option">
+          <input type="radio" name="mode" value="layered" />
+          Layered Movement
+        </label>
+      </div>
+    </div>
+
+    <div class="demo-wrapper">
+      <div class="demo-content">
+        <div>
+          <h2>Preview your dotted background</h2>
+          <p>The movement here is dialed down to be non-distracting. Use whichever feels best for the start experience. Try letting it run for a few seconds to feel the pace.</p>
+        </div>
+      </div>
+
+      <!-- Single-layer pattern -->
+      <div id="single-layer" class="dots-layer option-gentle-float"></div>
+
+      <!-- Layered pattern for the layered mode -->
+      <div id="layered" class="layered" style="display: none;">
+        <div class="layer-1"></div>
+        <div class="layer-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const radios = document.querySelectorAll('input[name="mode"]');
+    const singleLayer = document.getElementById('single-layer');
+    const layered = document.getElementById('layered');
+
+    function applyMode(value) {
+      // Reset classes
+      singleLayer.className = 'dots-layer';
+
+      // Switch modes
+      switch (value) {
+        case 'gentle-float':
+          layered.style.display = 'none';
+          singleLayer.style.display = 'block';
+          singleLayer.classList.add('option-gentle-float');
+          break;
+        case 'soft-pulse':
+          layered.style.display = 'none';
+          singleLayer.style.display = 'block';
+          singleLayer.classList.add('option-soft-pulse');
+          break;
+        case 'diagonal-drift':
+          layered.style.display = 'none';
+          singleLayer.style.display = 'block';
+          singleLayer.classList.add('option-diagonal-drift');
+          break;
+        case 'subtle-scale':
+          layered.style.display = 'none';
+          singleLayer.style.display = 'block';
+          singleLayer.classList.add('option-subtle-scale');
+          break;
+        case 'layered':
+          singleLayer.style.display = 'none';
+          layered.style.display = 'block';
+          break;
+        default:
+          layered.style.display = 'none';
+          singleLayer.style.display = 'block';
+          singleLayer.classList.add('option-gentle-float');
+      }
+    }
+
+    radios.forEach((radio) => {
+      radio.addEventListener('change', (e) => applyMode(e.target.value));
+    });
+
+    // Initial mode
+    applyMode('gentle-float');
+  </script>
+</body>
+</html>
+

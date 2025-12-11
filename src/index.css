@@ -1,8 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @layer base {
   :root {
@@ -67,6 +67,9 @@
     --sidebar-accent-foreground: 0 0% 9%;
     --sidebar-border: 0 0% 90%;
     --sidebar-ring: 0 84% 50%;
+
+    /* Dotted pattern data URI for start experience */
+    --dot-pattern: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
   }
 
   /* Dark mode for app interior (Discover, Targets, etc.) */
@@ -244,11 +247,31 @@
   .animate-float {
     animation: float 6s ease-in-out infinite;
   }
+
+  /* Subtle dotted background with gentle float (used on /start) */
+  .dotted-bg {
+    position: absolute;
+    inset: 0;
+    background-image: var(--dot-pattern);
+    background-repeat: repeat;
+    opacity: 0.03;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .dotted-bg-gentle-float {
+    animation: dotted-gentle-float 20s ease-in-out infinite;
+  }
 }
 
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
+}
+
+@keyframes dotted-gentle-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-18px); }
 }
 
 /* Mapbox overrides */

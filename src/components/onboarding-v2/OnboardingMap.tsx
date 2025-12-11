@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { Button } from '@/components/ui/button';
 import { Plus, Minus, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { OnboardingData } from './OnboardingPage';
@@ -207,19 +206,6 @@ export function OnboardingMap({ data, step }: OnboardingMapProps) {
       {/* Map container */}
       <div ref={mapContainer} className="absolute inset-0" />
 
-      {/* Draw button (placeholder for future feature) */}
-      <div className="absolute top-4 right-4">
-        <Button 
-          variant="outline" 
-          size="sm"
-          className="bg-white shadow-sm"
-          disabled
-          title="Coming soon: Draw custom territories"
-        >
-          Draw
-        </Button>
-      </div>
-
       {/* Zoom controls */}
       <div className="absolute bottom-8 right-4 flex flex-col gap-1">
         <button
@@ -236,13 +222,13 @@ export function OnboardingMap({ data, step }: OnboardingMapProps) {
         </button>
       </div>
 
-      {/* Territory info overlay */}
-      {(data.region || data.states.length > 0) && (
+      {/* Territory info overlay - only show states, not region */}
+      {data.states.length > 0 && (
         <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-sm max-w-xs">
           <p className="text-sm font-medium text-gray-900">
-            {data.region || `${data.states.length} state${data.states.length > 1 ? 's' : ''} selected`}
+            {data.states.length} state{data.states.length > 1 ? 's' : ''} selected
           </p>
-          {data.states.length > 0 && data.states.length <= 3 && (
+          {data.states.length <= 3 && (
             <p className="text-xs text-gray-500 mt-1">
               {data.states.join(', ')}
             </p>

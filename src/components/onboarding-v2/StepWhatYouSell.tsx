@@ -23,21 +23,25 @@ export function StepWhatYouSell({ data, updateData, onNext }: StepWhatYouSellPro
     
     const trimmedInput = input.trim();
     
-    // Check if input looks like a URL/domain
-    const isUrl = /^[a-zA-Z0-9][a-zA-Z0-9-]*(\.[a-zA-Z]{2,})+/.test(trimmedInput.replace(/^https?:\/\//, '').replace(/^www\./, ''));
+    // Check if input contains a URL/domain (even with extra text like "flocksafety.com - specifically alpr")
+    // Extract domain pattern: domain.com or domain.co.uk etc
+    const domainPattern = /([a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})*)/;
+    const domainMatch = trimmedInput.match(domainPattern);
     
-    if (isUrl) {
-      // Clean up URL
-      let cleanUrl = trimmedInput.toLowerCase();
-      cleanUrl = cleanUrl.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+    if (domainMatch) {
+      // Found a domain in the input
+      let cleanUrl = domainMatch[1].toLowerCase();
+      cleanUrl = cleanUrl.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split(' ')[0]; // Remove protocol, www, path, and any trailing text
       
       updateData({ 
         companyDomain: cleanUrl,
         companyName: cleanUrl.split('.')[0].charAt(0).toUpperCase() + cleanUrl.split('.')[0].slice(1),
-        productDescription: `Products and services from ${cleanUrl}`
+        productDescription: trimmedInput.includes(' - ') || trimmedInput.length > cleanUrl.length + 5
+          ? trimmedInput // Keep original if it has extra context
+          : `Products and services from ${cleanUrl}`
       });
     } else {
-      // It's a description
+      // It's a description without a domain
       updateData({ 
         productDescription: trimmedInput,
         companyDomain: undefined,
@@ -62,12 +66,7 @@ export function StepWhatYouSell({ data, updateData, onNext }: StepWhatYouSellPro
   return (
     <div className="flex-1 flex items-center justify-center px-8 relative overflow-hidden">
       {/* Subtle dotted background pattern */}
-      <div 
-        className="absolute inset-0 opacity-[0.03]" 
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-        }} 
-      />
+      <div className="dotted-bg dotted-bg-gentle-float" />
       
       <div className="w-full max-w-lg text-center relative z-10">
         {/* Title */}
