@@ -28,12 +28,15 @@ export interface OnboardingData {
   states: string[];
   cities: string[];
   territoryDescription?: string;
+  isCustomTerritory?: boolean; // true if user described territory instead of selecting states
   
   // Step 3
   targetCategories: string[];
   
   // Step 4
   competitors: string[];
+  suggestedCompetitors?: string[]; // AI-suggested competitors (from early research)
+  competitorResearchLoading?: boolean; // true while fetching suggestions
   
   // Filters (derived from selections)
   filters: string[];
@@ -85,6 +88,52 @@ export function OnboardingPage() {
   const updateData = useCallback((updates: Partial<OnboardingData>) => {
     setData(prev => ({ ...prev, ...updates }));
   }, []);
+  
+  // Trigger early competitor research when Step 1 is completed
+  // This runs in the background so suggestions are ready by Step 4
+  useEffect(() => {
+    const triggerCompetitorResearch = async () => {
+      // Only trigger if:
+      // 1. We just completed step 1 (now on step 2+)
+      // 2. We have a product description
+      // 3. We haven't already loaded suggestions
+      // 4. We're not already loading
+      if (
+        step >= 2 && 
+        data.productDescription && 
+        !data.suggestedCompetitors && 
+        !data.competitorResearchLoading
+      ) {
+        updateData({ competitorResearchLoading: true });
+        
+        try {
+          // TODO: Replace with actual API call when backend is ready
+          // const { data: suggestions, error } = await supabase.functions.invoke('research-competitors', {
+          //   body: {
+          //     productDescription: data.productDescription,
+          //     companyDomain: data.companyDomain,
+          //   }
+          // });
+          
+          // For now, simulate a delay to show the pattern is working
+          // The backend engineer will implement the actual API
+          console.log('🔍 [Frontend] Would trigger competitor research for:', {
+            productDescription: data.productDescription,
+            companyDomain: data.companyDomain,
+          });
+          
+          // Simulate API response (remove when backend is ready)
+          // In production, this would be: updateData({ suggestedCompetitors: suggestions, competitorResearchLoading: false });
+          
+        } catch (error) {
+          console.error('Failed to fetch competitor suggestions:', error);
+          updateData({ competitorResearchLoading: false });
+        }
+      }
+    };
+    
+    triggerCompetitorResearch();
+  }, [step, data.productDescription, data.companyDomain, data.suggestedCompetitors, data.competitorResearchLoading, updateData]);
 
   const nextStep = useCallback(() => {
     setStep(prev => Math.min(prev + 1, 5));
@@ -244,9 +293,9 @@ export function OnboardingPage() {
             sidebarExpanded ? "px-4 gap-2.5" : "justify-center"
           )}>
             <Link 
-              to={user ? '/discover' : '/'}
+              to={user ? '/start' : '/'}
               className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center hover:bg-primary/90 transition-colors flex-shrink-0"
-              title={user ? 'Go to Dashboard' : 'Go to Home'}
+              title={user ? 'Go to Workspace' : 'Go to Home'}
             >
               <Crosshair className="w-5 h-5 text-white" strokeWidth={2.5} />
             </Link>

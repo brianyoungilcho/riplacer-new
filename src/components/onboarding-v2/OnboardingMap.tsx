@@ -68,6 +68,20 @@ const REGION_CENTERS: Record<string, [number, number]> = {
   'West': [-119.0, 40.0],
 };
 
+// State name to abbreviation for Mapbox tileset matching
+const STATE_TO_ABBREV: Record<string, string> = {
+  'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
+  'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
+  'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
+  'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
+  'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
+  'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
+  'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH',
+  'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+  'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
+  'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY',
+};
+
 interface OnboardingMapProps {
   data: OnboardingData;
   step: number;
@@ -113,6 +127,40 @@ export function OnboardingMap({ data, step }: OnboardingMapProps) {
     });
 
     map.current.on('load', () => {
+      // Add source for state boundaries using Mapbox's boundaries tileset
+      if (map.current && !map.current.getSource('states')) {
+        map.current.addSource('states', {
+          type: 'vector',
+          url: 'mapbox://mapbox.boundaries-adm1-v4'
+        });
+
+        // Add fill layer for selected states (15% red fill - Option B)
+        map.current.addLayer({
+          id: 'state-fills',
+          type: 'fill',
+          source: 'states',
+          'source-layer': 'boundaries_admin_1',
+          filter: ['==', ['get', 'iso_3166_1'], 'US'], // Only US states
+          paint: {
+            'fill-color': '#ef4444',
+            'fill-opacity': 0
+          }
+        });
+
+        // Add border layer for selected states (2px red border - Option B)
+        map.current.addLayer({
+          id: 'state-borders',
+          type: 'line',
+          source: 'states',
+          'source-layer': 'boundaries_admin_1',
+          filter: ['==', ['get', 'iso_3166_1'], 'US'],
+          paint: {
+            'line-color': '#ef4444',
+            'line-width': 0
+          }
+        });
+      }
+      
       setMapLoaded(true);
     });
 
@@ -121,6 +169,43 @@ export function OnboardingMap({ data, step }: OnboardingMapProps) {
       map.current = null;
     };
   }, [mapboxToken]);
+  
+  // Update state highlighting when selected states change
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+    
+    const selectedAbbrevs = data.states.map(s => STATE_TO_ABBREV[s]).filter(Boolean);
+    
+    if (selectedAbbrevs.length > 0) {
+      // Create filter for selected states
+      // The boundaries tileset uses 'iso_3166_2' which is like 'US-CA'
+      const stateFilter: mapboxgl.FilterSpecification = [
+        'all',
+        ['==', ['get', 'iso_3166_1'], 'US'],
+        ['in', ['get', 'iso_3166_2'], ['literal', selectedAbbrevs.map(a => `US-${a}`)]]
+      ];
+      
+      // Update fill layer
+      map.current.setPaintProperty('state-fills', 'fill-opacity', [
+        'case',
+        ['in', ['get', 'iso_3166_2'], ['literal', selectedAbbrevs.map(a => `US-${a}`)]],
+        0.15, // 15% opacity for selected states
+        0     // transparent for unselected
+      ]);
+      
+      // Update border layer
+      map.current.setPaintProperty('state-borders', 'line-width', [
+        'case',
+        ['in', ['get', 'iso_3166_2'], ['literal', selectedAbbrevs.map(a => `US-${a}`)]],
+        2,  // 2px border for selected states
+        0   // no border for unselected
+      ]);
+    } else {
+      // No states selected - hide all highlights
+      map.current.setPaintProperty('state-fills', 'fill-opacity', 0);
+      map.current.setPaintProperty('state-borders', 'line-width', 0);
+    }
+  }, [data.states, mapLoaded]);
 
   // Update map view based on territory selections
   useEffect(() => {

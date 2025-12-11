@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Decision #2: Prospect Loading UX</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    .skeleton {
+      background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.8); opacity: 0.5; }
+      50% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(0.8); opacity: 0.5; }
+    }
+    .pulse-ring {
+      animation: pulse-ring 2s ease-in-out infinite;
+    }
+    @keyframes typewriter {
+      from { width: 0; }
+      to { width: 100%; }
+    }
+    .typewriter {
+      overflow: hidden;
+      white-space: nowrap;
+      animation: typewriter 2s steps(30) infinite;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-8">
+  <div class="max-w-6xl mx-auto">
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Decision #2: Prospect Loading Experience</h1>
+    <p class="text-gray-600 mb-8">When waiting for LLM responses, how should we show progress to users?</p>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-8">
+      <!-- Option A: Skeleton Cards -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="p-4 border-b border-gray-100">
+          <span class="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full mb-2">Option A</span>
+          <h3 class="text-lg font-semibold text-gray-900">Skeleton Cards</h3>
+          <p class="text-sm text-gray-500">Show placeholder cards that shimmer. Fast-feeling, industry standard.</p>
+        </div>
+        <div class="p-4 bg-gray-50 space-y-3">
+          <!-- Skeleton Card 1 -->
+          <div class="bg-white border border-gray-200 rounded-xl p-4">
+            <div class="flex items-start gap-4">
+              <div class="w-14 h-14 rounded-xl skeleton"></div>
+              <div class="flex-1 space-y-2">
+                <div class="h-5 w-32 skeleton rounded"></div>
+                <div class="h-4 w-48 skeleton rounded"></div>
+              </div>
+            </div>
+          </div>
+          <!-- Skeleton Card 2 -->
+          <div class="bg-white border border-gray-200 rounded-xl p-4">
+            <div class="flex items-start gap-4">
+              <div class="w-14 h-14 rounded-xl skeleton"></div>
+              <div class="flex-1 space-y-2">
+                <div class="h-5 w-40 skeleton rounded"></div>
+                <div class="h-4 w-36 skeleton rounded"></div>
+              </div>
+            </div>
+          </div>
+          <!-- Skeleton Card 3 -->
+          <div class="bg-white border border-gray-200 rounded-xl p-4">
+            <div class="flex items-start gap-4">
+              <div class="w-14 h-14 rounded-xl skeleton"></div>
+              <div class="flex-1 space-y-2">
+                <div class="h-5 w-28 skeleton rounded"></div>
+                <div class="h-4 w-44 skeleton rounded"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Option B: Centered Loading with Status -->
+      <div class="bg-white rounded-2xl shadow-sm border-2 border-red-500 overflow-hidden">
+        <div class="p-4 border-b border-gray-100">
+          <span class="inline-block px-3 py-1 bg-red-100 text-red-700 text-sm font-medium rounded-full mb-2">Option B ★ Recommended</span>
+          <h3 class="text-lg font-semibold text-gray-900">Status Messages + Skeleton</h3>
+          <p class="text-sm text-gray-500">Informative status messages while loading. Users know what's happening.</p>
+        </div>
+        <div class="p-4 bg-gray-50">
+          <!-- Status Header -->
+          <div class="bg-white border border-gray-200 rounded-xl p-6 mb-4 text-center">
+            <div class="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+              <div class="w-10 h-10 rounded-full border-4 border-red-500 border-t-transparent animate-spin"></div>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 mb-1">Finding prospects...</h3>
+            <p class="text-sm text-gray-500">Searching police departments in California</p>
+            <div class="mt-4 flex items-center justify-center gap-2 text-xs text-gray-400">
+              <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+              <span>OpenAI responding</span>
+              <span class="mx-2">•</span>
+              <span class="w-2 h-2 bg-amber-500 rounded-full pulse-ring"></span>
+              <span>Gemini searching</span>
+            </div>
+          </div>
+          <!-- Skeleton Cards Below -->
+          <div class="space-y-2">
+            <div class="bg-white/50 border border-gray-200 rounded-xl p-4">
+              <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-xl skeleton"></div>
+                <div class="flex-1 space-y-2">
+                  <div class="h-4 w-24 skeleton rounded"></div>
+                  <div class="h-3 w-32 skeleton rounded"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Option C: Progress Steps -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+      <div class="p-4 border-b border-gray-100">
+        <span class="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full mb-2">Option C</span>
+        <h3 class="text-lg font-semibold text-gray-900">Step-by-Step Progress</h3>
+        <p class="text-sm text-gray-500">Show each stage of the research process. Most transparent, but may feel slower.</p>
+      </div>
+      <div class="p-6 bg-gray-50">
+        <div class="max-w-md mx-auto">
+          <div class="space-y-4">
+            <!-- Step 1 - Complete -->
+            <div class="flex items-center gap-4">
+              <div class="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+              </div>
+              <div class="flex-1">
+                <p class="font-medium text-gray-900">Analyzing your criteria</p>
+                <p class="text-sm text-gray-500">Police departments in CA using Axon</p>
+              </div>
+              <span class="text-xs text-green-600 font-medium">Done</span>
+            </div>
+            <!-- Step 2 - In Progress -->
+            <div class="flex items-center gap-4">
+              <div class="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
+                <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              </div>
+              <div class="flex-1">
+                <p class="font-medium text-gray-900">Searching public records</p>
+                <p class="text-sm text-gray-500">Found 23 prospects so far...</p>
+              </div>
+              <span class="text-xs text-amber-600 font-medium">In progress</span>
+            </div>
+            <!-- Step 3 - Pending -->
+            <div class="flex items-center gap-4 opacity-50">
+              <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-400">
+                <span class="text-sm font-medium">3</span>
+              </div>
+              <div class="flex-1">
+                <p class="font-medium text-gray-500">Enriching with AI insights</p>
+                <p class="text-sm text-gray-400">Contract values, decision makers...</p>
+              </div>
+              <span class="text-xs text-gray-400 font-medium">Pending</span>
+            </div>
+            <!-- Step 4 - Pending -->
+            <div class="flex items-center gap-4 opacity-50">
+              <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-400">
+                <span class="text-sm font-medium">4</span>
+              </div>
+              <div class="flex-1">
+                <p class="font-medium text-gray-500">Scoring & ranking</p>
+                <p class="text-sm text-gray-400">Best opportunities first</p>
+              </div>
+              <span class="text-xs text-gray-400 font-medium">Pending</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+      <h4 class="font-medium text-blue-800 mb-1">UX Consideration</h4>
+      <p class="text-sm text-blue-700">Option B (recommended) provides the best balance - users see activity without feeling like they're waiting through explicit steps. The dual-LLM status indicators also build trust that we're doing thorough research.</p>
+    </div>
+  </div>
+</body>
+</html>

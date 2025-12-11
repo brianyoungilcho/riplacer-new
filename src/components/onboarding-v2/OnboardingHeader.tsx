@@ -85,24 +85,40 @@ export function OnboardingHeader({ data, step, user, onEditDomain, onEditTerrito
         {/* Territory pills - only show after step 2 is done */}
         {showTerritoryPills && (
           <div className="flex items-center gap-2 flex-shrink-0">
-            {data.states.slice(0, 5).map(state => (
-              <button
-                key={state}
-                onClick={() => onEditTerritory?.()}
-                className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
-                title="Click to edit territory"
-              >
-                {STATE_ABBREV[state] || state}
-              </button>
-            ))}
-            {data.states.length > 5 && (
+            {/* Show custom territory description if user typed one */}
+            {data.isCustomTerritory && data.territoryDescription ? (
               <button
                 onClick={() => onEditTerritory?.()}
-                className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-500 hover:bg-gray-200 transition-colors cursor-pointer"
-                title="Click to edit territory"
+                className="px-3 py-1.5 bg-purple-100 rounded-lg text-xs font-medium text-purple-700 hover:bg-purple-200 transition-colors cursor-pointer max-w-xs truncate"
+                title={`Custom territory: ${data.territoryDescription}`}
               >
-                +{data.states.length - 5}
+                📍 {data.territoryDescription.length > 40 
+                  ? data.territoryDescription.slice(0, 40) + '...' 
+                  : data.territoryDescription}
               </button>
+            ) : (
+              /* Show state pills for selected states */
+              <>
+                {data.states.slice(0, 5).map(state => (
+                  <button
+                    key={state}
+                    onClick={() => onEditTerritory?.()}
+                    className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+                    title="Click to edit territory"
+                  >
+                    {STATE_ABBREV[state] || state}
+                  </button>
+                ))}
+                {data.states.length > 5 && (
+                  <button
+                    onClick={() => onEditTerritory?.()}
+                    className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-500 hover:bg-gray-200 transition-colors cursor-pointer"
+                    title="Click to edit territory"
+                  >
+                    +{data.states.length - 5}
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
@@ -133,7 +149,7 @@ export function OnboardingHeader({ data, step, user, onEditDomain, onEditTerrito
             )}
           </div>
         ) : (
-          <Link to="/auth">
+          <Link to="/auth" state={{ from: '/start' }}>
             <Button 
               size="sm" 
               variant="outline"

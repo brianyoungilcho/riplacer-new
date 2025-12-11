@@ -3,7 +3,7 @@ import { OnboardingData } from './OnboardingPage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { Check, Plus, X } from 'lucide-react';
+import { Check, Plus, X, Loader2, Sparkles } from 'lucide-react';
 
 interface StepCompetitorsProps {
   data: OnboardingData;
@@ -38,8 +38,17 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
     setSelectedCompetitors(data.competitors);
   }, []);
 
-  // Get suggested competitors based on selected categories
+  // Check if AI research is still loading
+  const isResearchLoading = data.competitorResearchLoading;
+  
+  // Get suggested competitors - prioritize AI suggestions, fallback to category-based
   const getSuggestedCompetitors = (): string[] => {
+    // If we have AI-suggested competitors, use those first
+    if (data.suggestedCompetitors && data.suggestedCompetitors.length > 0) {
+      return data.suggestedCompetitors;
+    }
+    
+    // Fallback to category-based suggestions
     const competitors = new Set<string>();
     
     data.targetCategories.forEach(category => {
@@ -55,6 +64,7 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
   };
 
   const suggestedCompetitors = getSuggestedCompetitors();
+  const hasAISuggestions = data.suggestedCompetitors && data.suggestedCompetitors.length > 0;
 
   const handleCompetitorToggle = (competitor: string) => {
     setSelectedCompetitors(prev => 
@@ -176,30 +186,56 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
 
           {/* Suggested Competitors */}
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">
-              Suggested competitors
-            </label>
-            <div className="space-y-2">
-              {suggestedCompetitors.map(competitor => (
-                <button
-                  key={competitor}
-                  onClick={() => handleCompetitorToggle(competitor)}
-                  className={cn(
-                    "w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between",
-                    selectedCompetitors.includes(competitor)
-                      ? "border-gray-900 bg-gray-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  )}
-                >
-                  <span className="font-medium text-gray-900">{competitor}</span>
-                  {selectedCompetitors.includes(competitor) && (
-                    <div className="w-5 h-5 rounded-full bg-gray-900 flex items-center justify-center">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                </button>
-              ))}
+            <div className="flex items-center gap-2 mb-2">
+              <label className="text-sm font-medium text-gray-700">
+                {hasAISuggestions ? 'AI-suggested competitors' : 'Suggested competitors'}
+              </label>
+              {hasAISuggestions && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                  <Sparkles className="w-3 h-3" />
+                  AI
+                </span>
+              )}
+              {isResearchLoading && (
+                <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Researching...
+                </span>
+              )}
             </div>
+            
+            {isResearchLoading && suggestedCompetitors.length === 0 ? (
+              /* Loading state when no suggestions yet */
+              <div className="space-y-2">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="w-full p-3 rounded-xl border border-gray-200 bg-gray-50 animate-pulse">
+                    <div className="h-5 w-32 bg-gray-200 rounded"></div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {suggestedCompetitors.map(competitor => (
+                  <button
+                    key={competitor}
+                    onClick={() => handleCompetitorToggle(competitor)}
+                    className={cn(
+                      "w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between",
+                      selectedCompetitors.includes(competitor)
+                        ? "border-gray-900 bg-gray-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    )}
+                  >
+                    <span className="font-medium text-gray-900">{competitor}</span>
+                    {selectedCompetitors.includes(competitor) && (
+                      <div className="w-5 h-5 rounded-full bg-gray-900 flex items-center justify-center">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

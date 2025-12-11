@@ -293,3 +293,4 @@ export function SettingsTab({ data, onEditCriteria }: SettingsTabProps) {
     </div>
   );
 }
+

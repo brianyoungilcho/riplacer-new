@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Decision #5: Add Prospect & Delete UI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-8">
+  <div class="max-w-6xl mx-auto">
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Decision #5: Add & Delete Prospect UI</h1>
+    <p class="text-gray-600 mb-8">How should users add their own prospects and remove ones they don't want?</p>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-8">
+      <!-- Add Prospect UI -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="p-4 border-b border-gray-100">
+          <h3 class="text-lg font-semibold text-gray-900">Add Prospect UI</h3>
+          <p class="text-sm text-gray-500">User types a name, we fetch AI-enriched data</p>
+        </div>
+        <div class="p-4 bg-gray-50">
+          <!-- Header with Add button -->
+          <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h2 class="text-lg font-semibold text-gray-900">247 Prospects Found</h2>
+                <p class="text-sm text-gray-500">Sorted by Riplace Score</p>
+              </div>
+              <button class="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg font-medium text-sm hover:bg-red-600">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Add Prospect
+              </button>
+            </div>
+          </div>
+          
+          <!-- Add Prospect Modal -->
+          <div class="bg-white border-2 border-red-200 rounded-xl p-6 shadow-lg">
+            <h4 class="font-semibold text-gray-900 mb-1">Add a Prospect</h4>
+            <p class="text-sm text-gray-500 mb-4">Enter the organization name and we'll research it for you.</p>
+            
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Organization Name</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g., Oakland Police Department"
+                  class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  value="San Jose Fire Department"
+                >
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Location (optional)</label>
+                <input 
+                  type="text" 
+                  placeholder="City, State"
+                  class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  value="San Jose, CA"
+                >
+              </div>
+              
+              <div class="flex gap-3 pt-2">
+                <button class="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
+                  Cancel
+                </button>
+                <button class="flex-1 px-4 py-2.5 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600">
+                  Research & Add
+                </button>
+              </div>
+            </div>
+            
+            <p class="text-xs text-gray-400 mt-4 text-center">
+              We'll use AI to find contract details, decision makers, and riplace opportunities.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delete UI -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="p-4 border-b border-gray-100">
+          <h3 class="text-lg font-semibold text-gray-900">Delete Prospect UI</h3>
+          <p class="text-sm text-gray-500">Simple swipe or button to remove from list</p>
+        </div>
+        <div class="p-4 bg-gray-50 space-y-3">
+          <!-- Normal Card -->
+          <div class="bg-white border border-gray-200 rounded-xl p-4 flex items-start gap-4">
+            <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex flex-col items-center justify-center text-white flex-shrink-0">
+              <span class="text-xl font-bold">92</span>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <h3 class="font-semibold text-gray-900">Havensville PD</h3>
+                <span class="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">Contract Expiring</span>
+              </div>
+              <p class="text-sm text-gray-500">$500,000/yr • Contract expires March 2025...</p>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <button class="w-9 h-9 rounded-lg bg-gray-100 text-gray-400 hover:text-gray-600 hover:bg-gray-200 flex items-center justify-center transition-colors" title="Save to favorites">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                </svg>
+              </button>
+              <button class="w-9 h-9 rounded-lg bg-gray-100 text-gray-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center transition-colors" title="Remove from list">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Hover state - delete highlighted -->
+          <div class="bg-white border-2 border-red-200 rounded-xl p-4 flex items-start gap-4 relative">
+            <div class="absolute inset-0 bg-red-50/50 rounded-xl pointer-events-none"></div>
+            <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex flex-col items-center justify-center text-white flex-shrink-0 relative z-10">
+              <span class="text-xl font-bold">88</span>
+            </div>
+            <div class="flex-1 relative z-10">
+              <div class="flex items-center gap-2 mb-1">
+                <h3 class="font-semibold text-gray-900">Tontown PD</h3>
+                <span class="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">New Leadership</span>
+              </div>
+              <p class="text-sm text-gray-500">$250,000/yr • New police chief hired...</p>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0 relative z-10">
+              <button class="w-9 h-9 rounded-lg bg-gray-100 text-gray-400 flex items-center justify-center">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                </svg>
+              </button>
+              <button class="w-9 h-9 rounded-lg bg-red-500 text-white flex items-center justify-center shadow-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Confirmation toast -->
+          <div class="bg-gray-900 text-white rounded-xl p-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+              <span class="text-sm">Tontown PD removed from list</span>
+            </div>
+            <button class="text-sm text-red-400 hover:text-red-300 font-medium">Undo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading state for add -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+      <div class="p-4 border-b border-gray-100">
+        <h3 class="text-lg font-semibold text-gray-900">Add Prospect - Loading State</h3>
+        <p class="text-sm text-gray-500">While AI researches the new prospect</p>
+      </div>
+      <div class="p-6 bg-gray-50">
+        <div class="bg-white border border-gray-200 rounded-xl p-4 flex items-start gap-4">
+          <div class="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+            <svg class="w-6 h-6 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <h3 class="font-semibold text-gray-900">San Jose Fire Department</h3>
+              <span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 animate-pulse">Researching...</span>
+            </div>
+            <p class="text-sm text-gray-500">Finding contract details, decision makers, and opportunities...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+      <h4 class="font-medium text-green-800 mb-1">Frontend Implementation</h4>
+      <p class="text-sm text-green-700">Delete is pure frontend (remove from state + API call to backend). Add Prospect requires a backend endpoint to enrich the new prospect via AI before adding to the list. Both need optimistic UI updates for good UX.</p>
+    </div>
+  </div>
+</body>
+</html>

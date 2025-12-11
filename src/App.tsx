@@ -7,11 +7,13 @@ import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import OnboardingV2 from "./pages/OnboardingV2";
-import Discover from "./pages/Discover";
-import Targets from "./pages/Targets";
-import Favorites from "./pages/Favorites";
-import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import TermsOfService from "./pages/TermsOfService";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import CookiePolicy from "./pages/CookiePolicy";
+import AcceptableUsePolicy from "./pages/AcceptableUsePolicy";
+import Disclaimer from "./pages/Disclaimer";
+import RefundPolicy from "./pages/RefundPolicy";
 
 const queryClient = new QueryClient();
 
@@ -27,10 +29,12 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/start" element={<OnboardingV2 />} />
             <Route path="/onboarding" element={<OnboardingV2 />} />
-            <Route path="/discover" element={<Discover />} />
-            <Route path="/targets" element={<Targets />} />
-            <Route path="/favorites" element={<Favorites />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/cookies" element={<CookiePolicy />} />
+            <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
+            <Route path="/disclaimer" element={<Disclaimer />} />
+            <Route path="/refund" element={<RefundPolicy />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

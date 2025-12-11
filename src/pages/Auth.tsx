@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,13 +23,41 @@ export default function Auth() {
   
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
+
+  // Check if user came from /start or has onboarding progress
+  const getReturnPath = () => {
+    // Check URL state first (passed via navigate)
+    const fromState = (location.state as { from?: string })?.from;
+    if (fromState === '/start' || fromState === '/onboarding') {
+      return fromState;
+    }
+    
+    // Check if there's onboarding progress in localStorage
+    const onboardingProgress = localStorage.getItem('riplacer_onboarding_progress');
+    if (onboardingProgress) {
+      try {
+        const parsed = JSON.parse(onboardingProgress);
+        if (parsed.step && parsed.step > 1) {
+          return '/start';
+        }
+      } catch (e) {
+        // ignore parse errors
+      }
+    }
+    
+    return '/';
+  };
+
+  const returnPath = getReturnPath();
 
   useEffect(() => {
     if (user) {
-      navigate('/');
+      // If user signs in and has onboarding progress, go back to /start
+      navigate(returnPath === '/start' ? '/start' : '/');
     }
-  }, [user, navigate]);
+  }, [user, navigate, returnPath]);
 
   const validateForm = () => {
     try {
@@ -102,13 +130,13 @@ export default function Auth() {
       {/* Left side - Form */}
       <div className="flex-1 flex flex-col justify-center px-8 py-12 lg:px-16">
         <div className="w-full max-w-md mx-auto">
-          {/* Back to home */}
+          {/* Back button - returns to /start if user came from there */}
           <Link 
-            to="/" 
+            to={returnPath} 
             className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors mb-8"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to home
+            {returnPath === '/start' ? 'Back to setup' : 'Back to home'}
           </Link>
 
           {/* Logo */}

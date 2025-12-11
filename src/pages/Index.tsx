@@ -199,18 +199,62 @@ function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-8 border-t border-gray-100">
+      <footer className="py-10 border-t border-gray-100">
         <div className="container mx-auto px-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
-                <Crosshair className="w-4 h-4 text-white" strokeWidth={2.5} />
+          <div className="flex flex-col md:flex-row items-start justify-between gap-6">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
+                  <Crosshair className="w-4 h-4 text-white" strokeWidth={2.5} />
+                </div>
+                <span className="font-bold text-gray-900">Riplacer</span>
               </div>
-              <span className="font-bold text-gray-900">Riplacer</span>
+              <p className="text-sm text-gray-500">
+                © {new Date().getFullYear()} Riplacer. Built for reps who win.
+              </p>
             </div>
-            <p className="text-sm text-gray-500">
-              © {new Date().getFullYear()} Riplacer. Built for reps who win.
-            </p>
+            <div className="flex flex-wrap gap-x-8 gap-y-3">
+              <div>
+                <h4 className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-3">Legal</h4>
+                <ul className="space-y-2 text-sm">
+                  <li>
+                    <Link to="/terms" className="text-gray-600 hover:text-gray-900 transition-colors">
+                      Terms
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/privacy" className="text-gray-600 hover:text-gray-900 transition-colors">
+                      Privacy
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/cookies" className="text-gray-600 hover:text-gray-900 transition-colors">
+                      Cookies
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-3">Policies</h4>
+                <ul className="space-y-2 text-sm">
+                  <li>
+                    <Link to="/acceptable-use" className="text-gray-600 hover:text-gray-900 transition-colors">
+                      Acceptable Use
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/disclaimer" className="text-gray-600 hover:text-gray-900 transition-colors">
+                      Disclaimer
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/refund" className="text-gray-600 hover:text-gray-900 transition-colors">
+                      Refund
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       </footer>
@@ -226,14 +270,10 @@ export default function Index() {
   // Redirect logged-in users appropriately
   useEffect(() => {
     if (user && !profileLoading) {
-      if (profile?.onboarding_complete) {
-        navigate('/discover');
-      } else {
-        // User logged in but hasn't completed onboarding
-        navigate('/start');
-      }
+      // Always redirect to /start (consolidated workspace)
+      navigate('/start');
     }
-  }, [user, profile, profileLoading, navigate]);
+  }, [user, profileLoading, navigate]);
 
   // Show loading only for authenticated users checking profile
   if (user && (authLoading || profileLoading)) {

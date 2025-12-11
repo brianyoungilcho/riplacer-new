@@ -74,10 +74,14 @@ export function StepWhereYouSell({ data, updateData, onNext, onBack }: StepWhere
   };
 
   const handleContinue = () => {
+    // Determine if this is a custom territory (description-based) or state selection
+    const isCustomTerritory = description.trim().length > 0 && selectedStates.length === 0;
+    
     updateData({
       region: activeRegion,
       states: selectedStates,
       territoryDescription: description || undefined,
+      isCustomTerritory,
     });
     onNext();
   };
