@@ -18,6 +18,7 @@ This document contains everything you need to implement the backend APIs and dat
 8. [Map Integration](#map-integration)
 9. [Authentication Considerations](#authentication-considerations)
 10. [Testing & Validation](#testing--validation)
+11. [Frontend Integration Points](#frontend-integration-points)
 
 ---
 
@@ -30,7 +31,7 @@ Riplacer helps B2B sales reps find "rip & replace" opportunities - government/en
 2. **Step 2**: User defines their sales territory (states or custom description)
 3. **Step 3**: User selects target buyer categories (police, fire, schools, etc.)
 4. **Step 4**: User selects competitors to displace
-5. **Discovery**: System shows AI-researched prospects with "Riplace Scores"
+5. **Discovery**: System shows AI-researched prospects with "Riplace Scores" on an interactive map
 
 ### Key Backend Requirements
 - Early competitor research (triggered after Step 1)
@@ -38,6 +39,7 @@ Riplacer helps B2B sales reps find "rip & replace" opportunities - government/en
 - Territory parsing for custom descriptions
 - Prospect enrichment API
 - Soft-delete and persistence for user prospects
+- **Prospects must be filtered by selected territory states**
 
 ---
 
@@ -80,6 +82,7 @@ id UUID PRIMARY KEY
 name TEXT NOT NULL
 address TEXT
 lat FLOAT, lng FLOAT
+state TEXT                    -- State where prospect is located
 website_url TEXT
 phone TEXT
 place_id TEXT UNIQUE
@@ -103,6 +106,7 @@ prospect_id UUID (references prospects)
 status lead_status ENUM ('saved', 'contacted', 'meeting_booked', 'won', 'lost', 'irrelevant')
 notes TEXT
 ai_hook TEXT
+deleted_at TIMESTAMPTZ       -- Soft delete timestamp
 created_at, updated_at TIMESTAMPTZ
 UNIQUE(user_id, prospect_id)
 ```
@@ -115,6 +119,7 @@ region TEXT
 states JSONB
 cities JSONB
 description TEXT
+is_custom_territory BOOLEAN   -- True if user typed custom description
 created_at, updated_at TIMESTAMPTZ
 ```
 
@@ -190,6 +195,8 @@ Example: ["Company A", "Company B", "Company C"]
 
 **Purpose**: Main prospect discovery endpoint. Uses parallel LLM calls to find prospects matching user criteria.
 
+**IMPORTANT**: Prospects must be located within the user's selected territory states. The frontend displays these prospects as markers on a map, and they should only appear within the highlighted territory.
+
 **Request**:
 ```typescript
 POST /functions/v1/discover-prospects
@@ -197,13 +204,13 @@ POST /functions/v1/discover-prospects
   // User criteria
   productDescription: string;
   territory: {
-    states: string[];
+    states: string[];           // e.g., ["Connecticut", "Massachusetts", "New York"]
     cities?: string[];
     customDescription?: string;
     isCustomTerritory: boolean;
   };
-  targetCategories: string[];  // e.g., ["police", "fire", "schools_k12"]
-  competitors: string[];       // e.g., ["Axon", "Motorola"]
+  targetCategories: string[];   // e.g., ["police", "fire", "schools_k12"]
+  competitors: string[];        // e.g., ["Axon", "Motorola"]
   
   // Pagination
   page: number;        // 0-indexed
@@ -237,8 +244,12 @@ interface Prospect {
   riplaceAngle: string;       // 2-3 sentence explanation
   sources: { label: string; url: string }[];
   lastUpdated: string;        // ISO date
-  lat?: number;
-  lng?: number;
+  
+  // REQUIRED for map display - must be within selected states
+  lat: number;                // Latitude
+  lng: number;                // Longitude  
+  state: string;              // State name (e.g., "Massachusetts")
+  
   address?: string;
   website?: string;
   phone?: string;
@@ -248,6 +259,7 @@ interface Prospect {
 **Implementation Notes**:
 - Run OpenAI and Gemini in parallel (Promise.all)
 - Merge and deduplicate results
+- **CRITICAL**: Filter results to only include prospects in the specified `territory.states`
 - Score prospects based on:
   - Contract timing signals (RFPs, expirations)
   - Leadership changes
@@ -255,6 +267,7 @@ interface Prospect {
   - Competitor usage evidence
 - First page should return in <10 seconds
 - Cache results by criteria hash for 24 hours
+- **Include accurate lat/lng coordinates for map display**
 
 **LLM Prompt Strategy**:
 
@@ -262,13 +275,15 @@ For **OpenAI** (better at structured reasoning):
 ```
 You are a B2B sales intelligence researcher. Find government/enterprise accounts that:
 
-1. Are located in: {territory}
+1. Are located ONLY in these states: {territory.states.join(", ")}
 2. Fall into these categories: {targetCategories}
 3. Currently use or might use: {competitors}
 4. Would be good prospects for: {productDescription}
 
 For each prospect found, provide:
 - Organization name
+- City and State (MUST be in the specified states)
+- Approximate latitude and longitude
 - Why they're a good target (contract expiring, new leadership, RFP open, etc.)
 - Estimated contract value
 - Confidence score (0-100)
@@ -280,7 +295,7 @@ Return as JSON array.
 For **Gemini** (better at web knowledge):
 ```
 Search for government agencies and organizations that match:
-- Location: {territory}  
+- Location: ONLY in these states: {territory.states.join(", ")}
 - Type: {targetCategories}
 - May be using: {competitors}
 
@@ -291,6 +306,7 @@ Find recent news, RFPs, budget documents, or contract announcements that indicat
 - Leadership changes
 
 Return real organization names with specific, verifiable details.
+Include city, state, and approximate coordinates for each.
 ```
 
 ---
@@ -308,6 +324,9 @@ POST /functions/v1/enrich-single-prospect
   userContext: {
     productDescription: string;
     competitors: string[];
+    territory: {
+      states: string[];
+    };
   };
 }
 ```
@@ -325,6 +344,7 @@ POST /functions/v1/enrich-single-prospect
 - Use Gemini for web search capabilities
 - Try to find real information about the organization
 - Generate Riplace Score based on available signals
+- **Verify the prospect is in the user's territory before returning**
 - Response time target: <8 seconds
 
 ---
@@ -387,30 +407,6 @@ POST /functions/v1/delete-prospect
 
 ---
 
-### 6. `get-state-boundaries` (NEW - Priority: LOW)
-
-**Purpose**: Return GeoJSON for state boundaries to display on map.
-
-**Request**:
-```typescript
-GET /functions/v1/get-state-boundaries?states=CA,OR,WA
-```
-
-**Response**:
-```typescript
-{
-  type: "FeatureCollection",
-  features: GeoJSON.Feature[]  // Standard GeoJSON
-}
-```
-
-**Implementation Notes**:
-- Can use static GeoJSON files or a tiles service
-- Consider using Mapbox's built-in state boundaries tileset instead
-- Frontend will render as filled polygons (15% red fill + 2px border)
-
----
-
 ## Database Changes Needed
 
 ### 1. Add `deleted_at` to `user_leads`
@@ -419,7 +415,13 @@ ALTER TABLE user_leads ADD COLUMN deleted_at TIMESTAMPTZ DEFAULT NULL;
 CREATE INDEX idx_user_leads_deleted ON user_leads(user_id, deleted_at);
 ```
 
-### 2. Add competitor research cache table
+### 2. Add `state` to `prospects` (if not exists)
+```sql
+ALTER TABLE prospects ADD COLUMN IF NOT EXISTS state TEXT;
+CREATE INDEX idx_prospects_state ON prospects(state);
+```
+
+### 3. Add competitor research cache table
 ```sql
 CREATE TABLE competitor_research_cache (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -433,7 +435,7 @@ CREATE INDEX idx_competitor_cache_hash ON competitor_research_cache(input_hash);
 CREATE INDEX idx_competitor_cache_expires ON competitor_research_cache(expires_at);
 ```
 
-### 3. Add prospect discovery cache table
+### 4. Add prospect discovery cache table
 ```sql
 CREATE TABLE prospect_discovery_cache (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -449,7 +451,7 @@ CREATE TABLE prospect_discovery_cache (
 CREATE INDEX idx_discovery_cache_hash ON prospect_discovery_cache(criteria_hash);
 ```
 
-### 4. Add user prospect list table (for persisting discovery results per user)
+### 5. Add user prospect list table (for persisting discovery results per user)
 ```sql
 CREATE TABLE user_prospect_lists (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -498,44 +500,59 @@ GEMINI_API_KEY=...
 
 ## Map Integration
 
-### Current Setup
-- Using Mapbox GL JS
-- Token fetched via `get-mapbox-token` edge function
+### Current Frontend Implementation
 
-### Territory Visualization
-Frontend expects to receive prospect lat/lng coordinates. For state boundary visualization:
+The frontend displays prospects on an interactive Mapbox map with the following features:
 
-**Option A (Recommended)**: Use Mapbox's built-in `us-states` tileset
-- No backend changes needed
-- Frontend will query tileset directly
+#### Territory Visualization (IMPLEMENTED)
+- Uses free GeoJSON source: `https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json`
+- Selected states are highlighted with:
+  - 15% red fill (`#ef4444` at 0.15 opacity)
+  - 2px red border
 
-**Option B**: Serve GeoJSON via API
-- Implement `get-state-boundaries` endpoint
-- Return simplified GeoJSON polygons
+#### Prospect Markers (IMPLEMENTED - Airbnb-style)
+- **Zoomed out (zoom < 6)**: Compact red circles showing only the score
+- **Zoomed in (zoom >= 6)**: Full pill showing prospect name + score
+- Dynamic sizing based on zoom level
+- Clicking a marker:
+  - Centers the map on that prospect
+  - Expands the corresponding card in the left panel
+  - Scrolls the card into view
 
-### Style Spec (for frontend reference)
-```javascript
-// State fill layer
+### Backend Requirements for Map
+
+**Each prospect MUST include**:
+```typescript
 {
-  'id': 'state-fills',
-  'type': 'fill',
-  'source': 'states',
-  'paint': {
-    'fill-color': '#ef4444',
-    'fill-opacity': 0.15
-  }
+  lat: number;    // Accurate latitude
+  lng: number;    // Accurate longitude
+  state: string;  // State name (e.g., "Massachusetts")
 }
+```
 
-// State border layer  
-{
-  'id': 'state-borders',
-  'type': 'line',
-  'source': 'states',
-  'paint': {
-    'line-color': '#ef4444',
-    'line-width': 2
-  }
-}
+**Geocoding Strategy**:
+1. If you have an address, use Google Geocoding API or Mapbox Geocoding
+2. For known government buildings, use existing databases
+3. As fallback, use approximate city center coordinates
+4. **Always verify the coordinates fall within the claimed state**
+
+### State Coordinate Reference
+For generating mock data or fallback coordinates:
+```typescript
+const STATE_CENTERS: Record<string, { lat: number; lng: number }> = {
+  'Connecticut': { lat: 41.6032, lng: -72.7554 },
+  'Delaware': { lat: 38.9108, lng: -75.5277 },
+  'Maine': { lat: 45.2538, lng: -69.4455 },
+  'Maryland': { lat: 39.0458, lng: -76.6413 },
+  'Massachusetts': { lat: 42.4072, lng: -71.3824 },
+  'New Hampshire': { lat: 43.1939, lng: -71.5724 },
+  'New Jersey': { lat: 40.0583, lng: -74.4057 },
+  'New York': { lat: 43.2994, lng: -75.4999 },
+  'Pennsylvania': { lat: 41.2033, lng: -77.1945 },
+  'Rhode Island': { lat: 41.5801, lng: -71.4774 },
+  'Vermont': { lat: 44.5588, lng: -72.5778 },
+  // ... add more as needed
+};
 ```
 
 ---
@@ -547,13 +564,16 @@ Frontend expects to receive prospect lat/lng coordinates. For state boundary vis
 - Prospects saved to database
 - Unlimited discovery results
 - Can delete/add prospects
+- Map shows all prospects
 
 ### Unauthenticated Users
 - Limited to 10 prospects (frontend enforces display limit)
 - Cannot delete prospects
 - Cannot add custom prospects
+- Cannot expand prospect details
 - Data stored in localStorage only (not persisted to DB)
 - Discovery API should still work (for conversion)
+- Map shows first 10 prospects only
 
 ### API Authorization
 ```typescript
@@ -580,16 +600,19 @@ if (!user) {
 4. Cached request → Returns cached result quickly
 
 ### Test Cases for `discover-prospects`
-1. Basic criteria → Returns scored prospects
+1. Basic criteria → Returns scored prospects **within specified states only**
 2. Pagination → Subsequent pages don't duplicate
 3. Custom territory description → Parses and searches correctly
 4. One LLM fails → Still returns results from other
 5. Unauthenticated user → Returns results but doesn't persist
+6. **All returned prospects have valid lat/lng/state**
+7. **No prospects outside selected territory states**
 
 ### Test Cases for `enrich-single-prospect`
-1. Real organization → Returns enriched data
+1. Real organization → Returns enriched data with coordinates
 2. Unknown organization → Returns best-effort data with low confidence
 3. Invalid input → Returns error gracefully
+4. **Organization outside territory → Returns error or warning**
 
 ### Performance Targets
 | Endpoint | Target Response Time |
@@ -611,10 +634,37 @@ if (!user) {
 3. **enrich-single-prospect**: Called in `DiscoveryTab.tsx` when user clicks "Add Prospect" from search
 4. **delete-prospect**: Called in `DiscoveryTab.tsx` when user clicks delete button
 
+### Frontend Files Reference
+- `src/components/onboarding-v2/OnboardingPage.tsx` - Main orchestrator, manages state
+- `src/components/onboarding-v2/OnboardingMap.tsx` - Map component with markers
+- `src/components/onboarding-v2/workspace/DiscoveryTab.tsx` - Prospect list and management
+- `src/components/onboarding-v2/StepCompetitors.tsx` - Competitor selection UI
+
 ### Frontend State Management
 - `OnboardingData.suggestedCompetitors` - Populated by research-competitors
 - `OnboardingData.competitorResearchLoading` - Loading state for research
-- Prospects stored in component state, synced to localStorage for unauthenticated users
+- `OnboardingData.states` - Selected territory states (prospects must be in these)
+- `mapProspects` - Prospects array passed to map for marker display
+- `selectedProspectId` - Currently selected prospect (synced between map and list)
+
+### Prospect Interface (Frontend expects this)
+```typescript
+interface Prospect {
+  id: string;
+  name: string;
+  score: number;
+  contractValue: string;
+  highlight: string;
+  highlightType: 'opportunity' | 'timing' | 'weakness';
+  riplaceAngle: string;
+  sources: { label: string; url: string }[];
+  lastUpdated: string;
+  lat?: number;       // Required for map
+  lng?: number;       // Required for map
+  state?: string;     // Required for territory filtering
+  isDeleted?: boolean;
+}
+```
 
 ---
 
@@ -627,6 +677,7 @@ Please clarify if you need more details on:
 3. **Rate Limiting**: Specific limits for authenticated vs unauthenticated?
 4. **Error Responses**: Specific error code/message format preferences?
 5. **Logging**: What level of detail for debugging?
+6. **Geocoding**: Preferred geocoding service for prospect coordinates?
 
 ---
 
@@ -634,10 +685,10 @@ Please clarify if you need more details on:
 
 If you have questions about frontend expectations or want to test integration:
 - Frontend code is in `/src/components/onboarding-v2/`
-- Main files: `OnboardingPage.tsx`, `workspace/DiscoveryTab.tsx`, `StepCompetitors.tsx`
+- Main files: `OnboardingPage.tsx`, `OnboardingMap.tsx`, `workspace/DiscoveryTab.tsx`
 - Run dev server: `npm run dev` (port 8081)
 
 ---
 
-*Document created: $(date)*
-*Last updated: $(date)*
+*Document created: December 2024*
+*Last updated: January 2025*
