@@ -1,9 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Plus, Minus, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { OnboardingData } from './OnboardingPage';
+
+// Prospect type for map markers
+interface MapProspect {
+  id: string;
+  name: string;
+  score: number;
+  lat?: number;
+  lng?: number;
+}
 
 // State center coordinates (approximate)
 const STATE_CENTERS: Record<string, [number, number]> = {
@@ -85,15 +94,21 @@ const STATE_TO_ABBREV: Record<string, string> = {
 interface OnboardingMapProps {
   data: OnboardingData;
   step: number;
+  prospects?: MapProspect[];
+  selectedProspectId?: string | null;
+  onProspectClick?: (id: string) => void;
 }
 
-export function OnboardingMap({ data, step }: OnboardingMapProps) {
+export function OnboardingMap({ data, step, prospects = [], selectedProspectId, onProspectClick }: OnboardingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [sourceLoaded, setSourceLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
+  const [zoomLevel, setZoomLevel] = useState(3.5);
 
   // Fetch Mapbox token from edge function
   useEffect(() => {
@@ -127,20 +142,18 @@ export function OnboardingMap({ data, step }: OnboardingMapProps) {
     });
 
     map.current.on('load', () => {
-      // Add source for state boundaries using Mapbox's boundaries tileset
-      if (map.current && !map.current.getSource('states')) {
-        map.current.addSource('states', {
-          type: 'vector',
-          url: 'mapbox://mapbox.boundaries-adm1-v4'
+      // Add source for state boundaries using free GeoJSON from public CDN
+      if (map.current && !map.current.getSource('us-states')) {
+        map.current.addSource('us-states', {
+          type: 'geojson',
+          data: 'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json'
         });
 
         // Add fill layer for selected states (15% red fill - Option B)
         map.current.addLayer({
           id: 'state-fills',
           type: 'fill',
-          source: 'states',
-          'source-layer': 'boundaries_admin_1',
-          filter: ['==', ['get', 'iso_3166_1'], 'US'], // Only US states
+          source: 'us-states',
           paint: {
             'fill-color': '#ef4444',
             'fill-opacity': 0
@@ -151,9 +164,7 @@ export function OnboardingMap({ data, step }: OnboardingMapProps) {
         map.current.addLayer({
           id: 'state-borders',
           type: 'line',
-          source: 'states',
-          'source-layer': 'boundaries_admin_1',
-          filter: ['==', ['get', 'iso_3166_1'], 'US'],
+          source: 'us-states',
           paint: {
             'line-color': '#ef4444',
             'line-width': 0
@@ -164,6 +175,20 @@ export function OnboardingMap({ data, step }: OnboardingMapProps) {
       setMapLoaded(true);
     });
 
+    // Listen for source data to finish loading
+    map.current.on('sourcedata', (e) => {
+      if (e.sourceId === 'us-states' && e.isSourceLoaded) {
+        setSourceLoaded(true);
+      }
+    });
+
+    // Track zoom level for dynamic marker sizing
+    map.current.on('zoom', () => {
+      if (map.current) {
+        setZoomLevel(map.current.getZoom());
+      }
+    });
+
     return () => {
       map.current?.remove();
       map.current = null;
@@ -172,23 +197,18 @@ export function OnboardingMap({ data, step }: OnboardingMapProps) {
   
   // Update state highlighting when selected states change
   useEffect(() => {
-    if (!map.current || !mapLoaded) return;
+    if (!map.current || !mapLoaded || !sourceLoaded) return;
     
-    const selectedAbbrevs = data.states.map(s => STATE_TO_ABBREV[s]).filter(Boolean);
+    // The GeoJSON uses full state names in the 'name' property
+    const selectedStateNames = data.states;
     
-    if (selectedAbbrevs.length > 0) {
-      // Create filter for selected states
-      // The boundaries tileset uses 'iso_3166_2' which is like 'US-CA'
-      const stateFilter: mapboxgl.FilterSpecification = [
-        'all',
-        ['==', ['get', 'iso_3166_1'], 'US'],
-        ['in', ['get', 'iso_3166_2'], ['literal', selectedAbbrevs.map(a => `US-${a}`)]]
-      ];
-      
-      // Update fill layer
+    console.log('🗺️ Updating map highlighting for states:', selectedStateNames);
+    
+    if (selectedStateNames.length > 0) {
+      // Update fill layer - highlight selected states
       map.current.setPaintProperty('state-fills', 'fill-opacity', [
         'case',
-        ['in', ['get', 'iso_3166_2'], ['literal', selectedAbbrevs.map(a => `US-${a}`)]],
+        ['in', ['get', 'name'], ['literal', selectedStateNames]],
         0.15, // 15% opacity for selected states
         0     // transparent for unselected
       ]);
@@ -196,7 +216,7 @@ export function OnboardingMap({ data, step }: OnboardingMapProps) {
       // Update border layer
       map.current.setPaintProperty('state-borders', 'line-width', [
         'case',
-        ['in', ['get', 'iso_3166_2'], ['literal', selectedAbbrevs.map(a => `US-${a}`)]],
+        ['in', ['get', 'name'], ['literal', selectedStateNames]],
         2,  // 2px border for selected states
         0   // no border for unselected
       ]);
@@ -205,7 +225,7 @@ export function OnboardingMap({ data, step }: OnboardingMapProps) {
       map.current.setPaintProperty('state-fills', 'fill-opacity', 0);
       map.current.setPaintProperty('state-borders', 'line-width', 0);
     }
-  }, [data.states, mapLoaded]);
+  }, [data.states, mapLoaded, sourceLoaded]);
 
   // Update map view based on territory selections
   useEffect(() => {
@@ -255,6 +275,129 @@ export function OnboardingMap({ data, step }: OnboardingMapProps) {
       duration: 1500,
     });
   }, [data.region, data.states, data.cities, mapLoaded]);
+
+  // Create marker element for a prospect (Airbnb-style pill)
+  // Dynamic sizing based on zoom level (like Airbnb)
+  const getMarkerScale = useCallback((zoom: number) => {
+    if (zoom < 5) return 0.7;      // Very zoomed out - smaller pills
+    if (zoom < 7) return 0.85;     // Medium zoom
+    if (zoom < 9) return 1;        // Normal size
+    return 1.1;                     // Zoomed in - slightly larger
+  }, []);
+
+  const createMarkerElement = useCallback((prospect: MapProspect, isSelected: boolean, zoom: number) => {
+    const el = document.createElement('div');
+    el.className = 'prospect-marker';
+    
+    const scale = getMarkerScale(zoom);
+    const selectedStyles = isSelected 
+      ? 'ring-2 ring-red-500 ring-offset-2 scale-110' 
+      : 'hover:scale-105';
+    
+    // At very low zoom, show only score badge (like Airbnb's clustered view)
+    const showName = zoom >= 6;
+    
+    el.innerHTML = showName ? `
+      <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full shadow-lg cursor-pointer transition-all duration-200 ${selectedStyles} bg-white border border-gray-200" style="transform: scale(${scale}); transform-origin: bottom center;">
+        <span class="text-xs font-semibold text-gray-900 whitespace-nowrap max-w-[100px] truncate">${prospect.name}</span>
+        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold">${prospect.score}</span>
+      </div>
+    ` : `
+      <div class="flex items-center justify-center w-8 h-8 rounded-full shadow-lg cursor-pointer transition-all duration-200 ${selectedStyles} bg-red-500 text-white border-2 border-white" style="transform: scale(${scale}); transform-origin: center;">
+        <span class="text-xs font-bold">${prospect.score}</span>
+      </div>
+    `;
+    
+    el.style.cursor = 'pointer';
+    el.style.zIndex = isSelected ? '1000' : '1';
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onProspectClick?.(prospect.id);
+    });
+    
+    return el;
+  }, [onProspectClick, getMarkerScale]);
+
+  // Update prospect markers when prospects or zoom changes
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+    
+    // Remove old markers that are no longer in the prospects list
+    const currentIds = new Set(prospects.map(p => p.id));
+    markersRef.current.forEach((marker, id) => {
+      if (!currentIds.has(id)) {
+        marker.remove();
+        markersRef.current.delete(id);
+      }
+    });
+    
+    // Add or update markers for each prospect
+    prospects.forEach(prospect => {
+      if (!prospect.lat || !prospect.lng) return;
+      
+      const isSelected = prospect.id === selectedProspectId;
+      const existingMarker = markersRef.current.get(prospect.id);
+      
+      // Always recreate marker to reflect current zoom level and selection state
+      if (existingMarker) {
+        existingMarker.remove();
+      }
+      
+      const el = createMarkerElement(prospect, isSelected, zoomLevel);
+      const anchor = zoomLevel >= 6 ? 'bottom' : 'center'; // Center anchor for score-only dots
+      const marker = new mapboxgl.Marker({ element: el, anchor })
+        .setLngLat([prospect.lng, prospect.lat])
+        .addTo(map.current!);
+      markersRef.current.set(prospect.id, marker);
+    });
+  }, [prospects, selectedProspectId, mapLoaded, zoomLevel, createMarkerElement]);
+
+  // Initial fit bounds when prospects first load
+  const hasFittedBounds = useRef(false);
+  useEffect(() => {
+    if (!map.current || !mapLoaded || hasFittedBounds.current) return;
+    
+    if (prospects.length > 0 && step === 5) {
+      const validProspects = prospects.filter(p => p.lat && p.lng);
+      if (validProspects.length > 0) {
+        const bounds = new mapboxgl.LngLatBounds();
+        validProspects.forEach(p => {
+          if (p.lat && p.lng) {
+            bounds.extend([p.lng, p.lat]);
+          }
+        });
+        
+        map.current.fitBounds(bounds, {
+          padding: { top: 50, bottom: 50, left: 50, right: 50 },
+          maxZoom: 10,
+          duration: 1000
+        });
+        hasFittedBounds.current = true;
+      }
+    }
+  }, [prospects, mapLoaded, step]);
+
+  // Center map on selected prospect
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !selectedProspectId) return;
+    
+    const selectedProspect = prospects.find(p => p.id === selectedProspectId);
+    if (selectedProspect?.lat && selectedProspect?.lng) {
+      map.current.flyTo({
+        center: [selectedProspect.lng, selectedProspect.lat],
+        zoom: Math.max(map.current.getZoom(), 8), // Zoom in if needed
+        duration: 800
+      });
+    }
+  }, [selectedProspectId, prospects, mapLoaded]);
+
+  // Cleanup markers on unmount
+  useEffect(() => {
+    return () => {
+      markersRef.current.forEach(marker => marker.remove());
+      markersRef.current.clear();
+    };
+  }, []);
 
   const handleZoomIn = () => {
     map.current?.zoomIn();

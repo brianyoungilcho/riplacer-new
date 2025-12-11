@@ -9,6 +9,8 @@ import { useAuth } from '@/hooks/useAuth';
 interface DiscoveryTabProps {
   data: OnboardingData;
   onProspectSelect?: (prospect: Prospect | null) => void;
+  onProspectsChange?: (prospects: Prospect[]) => void;
+  selectedProspectId?: string | null;
 }
 
 export interface Prospect {
@@ -23,6 +25,7 @@ export interface Prospect {
   lastUpdated: string;
   lat?: number;
   lng?: number;
+  state?: string; // State where prospect is located
   isDeleted?: boolean; // Soft delete flag
 }
 
@@ -45,8 +48,29 @@ const parseContractValue = (value: string): number => {
   return 0;
 };
 
+// State center coordinates for generating prospect locations
+const STATE_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  'Connecticut': { lat: 41.6032, lng: -72.7554 },
+  'Delaware': { lat: 38.9108, lng: -75.5277 },
+  'Maine': { lat: 45.2538, lng: -69.4455 },
+  'Maryland': { lat: 39.0458, lng: -76.6413 },
+  'Massachusetts': { lat: 42.4072, lng: -71.3824 },
+  'New Hampshire': { lat: 43.1939, lng: -71.5724 },
+  'New Jersey': { lat: 40.0583, lng: -74.4057 },
+  'New York': { lat: 43.2994, lng: -75.4999 },
+  'Pennsylvania': { lat: 41.2033, lng: -77.1945 },
+  'Rhode Island': { lat: 41.5801, lng: -71.4774 },
+  'Vermont': { lat: 44.5588, lng: -72.5778 },
+  // Add more states as needed
+  'California': { lat: 36.7783, lng: -119.4179 },
+  'Texas': { lat: 31.9686, lng: -99.9018 },
+  'Florida': { lat: 27.6648, lng: -81.5158 },
+  'Illinois': { lat: 40.6331, lng: -89.3985 },
+  'Ohio': { lat: 40.4173, lng: -82.9071 },
+};
+
 // Mock data generator for infinite scroll simulation
-const generateMockProspects = (page: number, pageSize: number): Prospect[] => {
+const generateMockProspects = (page: number, pageSize: number, selectedStates: string[]): Prospect[] => {
   const baseProspects = [
     { name: 'Havensville PD', highlight: 'Contract Expiring', highlightType: 'timing' as const, contractValue: '$500,000/yr', angle: 'Current contract with ShotSpotter expires March 2025. Recent city council meeting notes indicate budget concerns with renewal pricing.' },
     { name: 'Tontown PD', highlight: 'New Leadership', highlightType: 'opportunity' as const, contractValue: '$250,000/yr', angle: 'New police chief hired from neighboring county where they successfully implemented body cameras.' },
@@ -58,11 +82,21 @@ const generateMockProspects = (page: number, pageSize: number): Prospect[] => {
     { name: 'Summit City PD', highlight: 'Leadership Change', highlightType: 'opportunity' as const, contractValue: '$150,000/yr', angle: 'New IT director with background in modern cloud solutions.' },
   ];
 
+  // Use selected states for generating coordinates, fallback to all if none selected
+  const availableStates = selectedStates.length > 0 
+    ? selectedStates.filter(s => STATE_COORDINATES[s])
+    : Object.keys(STATE_COORDINATES);
+
   return Array.from({ length: pageSize }, (_, i) => {
     const idx = (page * pageSize + i) % baseProspects.length;
     const base = baseProspects[idx];
     const id = `prospect-${page}-${i}`;
     const score = Math.max(50, 95 - (page * 3) - Math.floor(Math.random() * 10));
+    
+    // Pick a random state from available states
+    const stateIdx = (page * pageSize + i) % availableStates.length;
+    const stateName = availableStates[stateIdx];
+    const stateCoords = STATE_COORDINATES[stateName] || { lat: 40, lng: -74 };
     
     return {
       id,
@@ -77,8 +111,9 @@ const generateMockProspects = (page: number, pageSize: number): Prospect[] => {
         { label: 'Budget Report', url: '#' },
       ],
       lastUpdated: '2025.12.06',
-      lat: 39.7817 + (Math.random() - 0.5) * 0.5,
-      lng: -89.6501 + (Math.random() - 0.5) * 0.5,
+      lat: stateCoords.lat + (Math.random() - 0.5) * 1.5, // Spread within state
+      lng: stateCoords.lng + (Math.random() - 0.5) * 1.5,
+      state: stateName,
     };
   });
 };
@@ -86,7 +121,7 @@ const generateMockProspects = (page: number, pageSize: number): Prospect[] => {
 const PAGE_SIZE = 15;
 const TOTAL_MOCK_PROSPECTS = 247;
 
-export function DiscoveryTab({ data, onProspectSelect }: DiscoveryTabProps) {
+export function DiscoveryTab({ data, onProspectSelect, onProspectsChange, selectedProspectId }: DiscoveryTabProps) {
   const { user } = useAuth();
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -196,18 +231,41 @@ export function DiscoveryTab({ data, onProspectSelect }: DiscoveryTabProps) {
   
   const hiddenProspectCount = !user ? Math.max(0, filteredAndSortedProspects.length - 10) : 0;
 
-  // Initial load
+  // Notify parent of prospects changes (for map markers)
+  useEffect(() => {
+    onProspectsChange?.(displayProspects);
+  }, [displayProspects, onProspectsChange]);
+
+  // Ref for scrolling to expanded card
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Expand card when selected from map and scroll into view
+  useEffect(() => {
+    if (selectedProspectId && selectedProspectId !== expandedId) {
+      setExpandedId(selectedProspectId);
+      
+      // Scroll the card into view after a short delay to allow expansion
+      setTimeout(() => {
+        const cardElement = cardRefs.current.get(selectedProspectId);
+        if (cardElement) {
+          cardElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+  }, [selectedProspectId]);
+
+  // Initial load - generate prospects for selected states
   useEffect(() => {
     setIsLoading(true);
     // Simulate API delay
     const timer = setTimeout(() => {
-      const initial = generateMockProspects(0, PAGE_SIZE);
+      const initial = generateMockProspects(0, PAGE_SIZE, data.states);
       setProspects(initial);
       setIsLoading(false);
       setHasMore(initial.length < TOTAL_MOCK_PROSPECTS);
     }, 800);
     return () => clearTimeout(timer);
-  }, []);
+  }, [data.states]);
 
   // Load favorites from localStorage
   useEffect(() => {
@@ -254,13 +312,13 @@ export function DiscoveryTab({ data, onProspectSelect }: DiscoveryTabProps) {
     
     // Simulate API delay
     setTimeout(() => {
-      const newProspects = generateMockProspects(nextPage, PAGE_SIZE);
+      const newProspects = generateMockProspects(nextPage, PAGE_SIZE, data.states);
       setProspects(prev => [...prev, ...newProspects]);
       setPage(nextPage);
       setHasMore(prospects.length + newProspects.length < TOTAL_MOCK_PROSPECTS);
       setIsLoadingMore(false);
     }, 600);
-  }, [page, isLoadingMore, hasMore, prospects.length]);
+  }, [page, isLoadingMore, hasMore, prospects.length, data.states]);
 
   const toggleExpand = (id: string) => {
     setExpandedId(prev => prev === id ? null : id);
@@ -658,9 +716,14 @@ export function DiscoveryTab({ data, onProspectSelect }: DiscoveryTabProps) {
             {displayProspects.map((prospect, index) => (
               <div
                 key={prospect.id}
+                ref={(el) => {
+                  if (el) cardRefs.current.set(prospect.id, el);
+                  else cardRefs.current.delete(prospect.id);
+                }}
                 className={cn(
                   "bg-white border border-gray-200 rounded-xl transition-all duration-200",
-                  expandedId === prospect.id ? "ring-2 ring-primary/20" : "hover:border-gray-300 hover:shadow-sm"
+                  expandedId === prospect.id ? "ring-2 ring-primary/20" : "hover:border-gray-300 hover:shadow-sm",
+                  selectedProspectId === prospect.id && "ring-2 ring-red-500"
                 )}
                 style={{
                   animation: `fadeInUp 0.3s ease-out forwards`,

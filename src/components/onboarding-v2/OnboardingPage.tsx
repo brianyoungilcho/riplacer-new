@@ -9,7 +9,7 @@ import { StepWhoYouSellTo } from './StepWhoYouSellTo';
 import { StepCompetitors } from './StepCompetitors';
 import { StepResults } from './StepResults';
 import { OnboardingMap } from './OnboardingMap';
-import { DiscoveryTab, SavedLeadsTab, SettingsTab } from './workspace';
+import { DiscoveryTab, SavedLeadsTab, SettingsTab, type Prospect } from './workspace';
 import { Crosshair, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Star, Settings, SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -61,6 +61,8 @@ export function OnboardingPage() {
   const [mapExpanded, setMapExpanded] = useState(true); // Map panel visibility
   const [searchCriteriaExpanded, setSearchCriteriaExpanded] = useState(false); // Search criteria dropdown
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('discovery'); // Workspace tab
+  const [mapProspects, setMapProspects] = useState<Prospect[]>([]); // Prospects for map markers
+  const [selectedProspectId, setSelectedProspectId] = useState<string | null>(null); // Selected prospect on map
 
   // Load saved progress from localStorage on mount
   useEffect(() => {
@@ -525,7 +527,12 @@ export function OnboardingPage() {
           >
             <ResizablePanel defaultSize={50} minSize={30} className="flex flex-col relative z-10 min-w-0">
               {activeTab === 'discovery' && (
-                <DiscoveryTab data={data} />
+                <DiscoveryTab 
+                  data={data} 
+                  onProspectsChange={setMapProspects}
+                  onProspectSelect={(p) => setSelectedProspectId(p?.id || null)}
+                  selectedProspectId={selectedProspectId}
+                />
               )}
               {activeTab === 'saved' && (
                 <SavedLeadsTab />
@@ -536,7 +543,13 @@ export function OnboardingPage() {
             </ResizablePanel>
             <ResizableHandle withHandle className="bg-gray-200 hover:bg-gray-300 transition-colors flex-shrink-0" />
             <ResizablePanel defaultSize={50} minSize={20} className="bg-gray-100 relative min-w-0 overflow-hidden">
-              <OnboardingMap data={data} step={5} />
+              <OnboardingMap 
+                data={data} 
+                step={5} 
+                prospects={mapProspects}
+                selectedProspectId={selectedProspectId}
+                onProspectClick={(id) => setSelectedProspectId(id)}
+              />
             </ResizablePanel>
           </ResizablePanelGroup>
         ) : isLaunched && !showMap ? (
