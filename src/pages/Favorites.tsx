@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,8 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
 
 interface FavoriteProspect {
   id: string;
@@ -70,6 +72,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function Favorites() {
+  const { user } = useAuth();
   const [favorites, setFavorites] = useState<FavoriteProspect[]>(MOCK_FAVORITES);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -90,9 +93,33 @@ export default function Favorites() {
     ));
   };
 
+  const handleRefresh = () => {
+    // Simulate refresh
+    setFavorites(prev => prev.map(f => ({
+      ...f,
+      lastUpdated: new Date().toISOString().split('T')[0],
+      riplaceAngle: f.riplaceAngle + ' (Refreshed: ' + new Date().toLocaleTimeString() + ')',
+    })));
+    toast.success('Refreshed all opportunities with latest intelligence.');
+  };
+
+  // For guest persistence, add useEffect to save status/notes to localStorage
+  useEffect(() => {
+    if (!user) {
+      localStorage.setItem('riplacer_favorites', JSON.stringify(favorites));
+    }
+  }, [favorites, user]);
+
   return (
     <AppLayout>
       <div className="h-full flex flex-col bg-gray-950">
+        {/* Guest mock banner if !user */}
+        {!user && (
+          <div className="p-4 bg-yellow-900/20 border-b border-yellow-800/50">
+            <p className="text-sm text-yellow-300">Mock data in guest mode. Sign up to save real favorites.</p>
+          </div>
+        )}
+        
         {/* Header */}
         <header className="h-16 border-b border-gray-800 flex items-center justify-between px-6 bg-gray-900">
           <div className="flex items-center gap-4">
@@ -101,7 +128,12 @@ export default function Favorites() {
               {favorites.length} saved
             </Badge>
           </div>
-          <Button variant="outline" size="sm" className="gap-2 text-gray-300 border-gray-700">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRefresh}
+            className="gap-2 text-gray-300 border-gray-700"
+          >
             <RefreshCw className="w-4 h-4" />
             Refresh All
           </Button>

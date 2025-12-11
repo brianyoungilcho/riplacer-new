@@ -616,3 +616,33 @@ If you need clarification on any part of this spec, please ask. The frontend is 
 
 Good luck! 🚀
 
+## Frontend Notes: Favorites vs Targets Integration
+
+### Current Implementation
+- **Targets (/targets)**: Manages all saved prospects from discovery/onboarding. Features status tracking (saved/contacted/meeting_booked/won/lost/irrelevant), notes, CSV export. Uses `user_leads` table.
+- **Favorites (/favorites)**: High-priority "starred" prospects (e.g., from onboarding results). Features expandable cards, status (active/contacted/won/lost), notes, daily refresh. Currently uses mock data; prepared for separate `user_favorites` table.
+
+Both pages overlap in functionality (saving, status, notes), but Favorites emphasizes quick-access starred items with daily AI re-enrichment.
+
+### Recommendations
+- **Option A: Merge into Single System** (Recommended for MVP): Use `user_leads` for everything. Add a `favorited` boolean flag and `priority_score` to distinguish. Favorites page becomes a filtered view of high-priority leads. Daily cron job re-enriches all leads, prioritizing favorited ones.
+  - Update frontend: Remove separate route; add filter toggle in Targets page.
+  - Benefits: Simpler DB (one table), less redundancy.
+
+- **Option B: Keep Separate**: If favorites need unique features (e.g., email integration, separate daily limits).
+  - Add `user_favorites` table (similar to `user_leads` but with `starred_at` timestamp).
+  - APIs:
+    - `POST /favorites`: Save prospect to favorites (body: { prospect_id, user_id }).
+    - `GET /favorites/:user_id`: List with latest enrichment (include daily cron trigger).
+    - `PUT /favorites/:id`: Update status/notes.
+    - `DELETE /favorites/:id`: Remove.
+  - Edge Function: `enrich-favorites` (similar to `enrich-prospect`, batch for daily updates).
+
+### Data Persistence
+- **Guests**: Frontend uses localStorage (`riplacer_favorites`, `riplacer_onboarding_favorites`). Backend should support anonymous sessions (via Supabase anon key) for temp saves, converting to user data on auth.
+- **Auth Users**: Full Supabase RLS on tables.
+- **Daily Updates**: Cron job (Supabase pg_cron) calls `enrich-prospect` for favorited/saved leads, updating `last_enriched_at` and scores.
+
+Implement based on MVP needs—start with merge if overlap is high.
+
+

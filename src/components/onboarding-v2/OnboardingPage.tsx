@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { OnboardingHeader } from './OnboardingHeader';
@@ -8,8 +8,9 @@ import { StepWhereYouSell } from './StepWhereYouSell';
 import { StepWhoYouSellTo } from './StepWhoYouSellTo';
 import { StepCompetitors } from './StepCompetitors';
 import { StepResults } from './StepResults';
+import { WorkspaceSidebar } from './WorkspaceSidebar';
 import { OnboardingMap } from './OnboardingMap';
-import { Crosshair } from 'lucide-react';
+import { Crosshair, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -50,6 +51,10 @@ export function OnboardingPage() {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<OnboardingData>(initialData);
   const [isSaving, setIsSaving] = useState(false);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const [isLaunched, setIsLaunched] = useState(false); // Track workspace mode
+  const [workspaceSidebarExpanded, setWorkspaceSidebarExpanded] = useState(true);
+  const [mapExpanded, setMapExpanded] = useState(true); // Map panel visibility
 
   // Load saved progress from localStorage on mount
   useEffect(() => {
@@ -59,6 +64,10 @@ export function OnboardingPage() {
         const parsed = JSON.parse(saved);
         setData(parsed.data || initialData);
         setStep(parsed.step || 1);
+        // Also check if already launched
+        if (parsed.isLaunched) {
+          setIsLaunched(true);
+        }
       } catch (e) {
         console.error('Failed to parse saved onboarding progress:', e);
       }
@@ -67,8 +76,8 @@ export function OnboardingPage() {
 
   // Save progress to localStorage on data/step change
   useEffect(() => {
-    localStorage.setItem('riplacer_onboarding_progress', JSON.stringify({ data, step }));
-  }, [data, step]);
+    localStorage.setItem('riplacer_onboarding_progress', JSON.stringify({ data, step, isLaunched }));
+  }, [data, step, isLaunched]);
 
   const updateData = useCallback((updates: Partial<OnboardingData>) => {
     setData(prev => ({ ...prev, ...updates }));
@@ -82,13 +91,13 @@ export function OnboardingPage() {
     setStep(prev => Math.max(prev - 1, 1));
   }, []);
 
-  const handleComplete = useCallback(async () => {
+  // Handle launching the search (transitions to workspace mode)
+  const handleLaunch = useCallback(async () => {
     setIsSaving(true);
     
     try {
       // Save to localStorage first
       localStorage.setItem('riplacer_onboarding', JSON.stringify(data));
-      localStorage.removeItem('riplacer_onboarding_progress'); // Clear progress
       
       // If user is logged in, save to database
       if (user) {
@@ -105,7 +114,6 @@ export function OnboardingPage() {
 
         if (profileError) {
           console.error('Failed to save profile:', profileError);
-          toast.error('Failed to save profile data');
         }
 
         // Save territory data
@@ -127,13 +135,11 @@ export function OnboardingPage() {
 
         // Save categories
         if (data.targetCategories.length > 0) {
-          // First delete existing categories
           await supabase
             .from('user_categories')
             .delete()
             .eq('user_id', user.id);
 
-          // Then insert new ones
           const categoryInserts = data.targetCategories.map(cat => ({
             user_id: user.id,
             category_id: cat,
@@ -151,13 +157,11 @@ export function OnboardingPage() {
 
         // Save competitors
         if (data.competitors.length > 0) {
-          // First delete existing competitors
           await supabase
             .from('user_competitors')
             .delete()
             .eq('user_id', user.id);
 
-          // Then insert new ones
           const competitorInserts = data.competitors.map(comp => ({
             user_id: user.id,
             competitor_name: comp,
@@ -171,18 +175,24 @@ export function OnboardingPage() {
             console.error('Failed to save competitors:', competitorError);
           }
         }
-
-        toast.success('Setup complete!');
       }
       
-      navigate('/discover');
+      // Transition to workspace mode
+      setIsLaunched(true);
+      toast.success('Finding prospects...');
     } catch (error) {
-      console.error('Failed to complete onboarding:', error);
+      console.error('Failed to launch:', error);
       toast.error('Something went wrong. Please try again.');
     } finally {
       setIsSaving(false);
     }
-  }, [data, user, navigate]);
+  }, [data, user]);
+
+  // Handle editing criteria from workspace mode
+  const handleEditCriteria = useCallback((targetStep: number) => {
+    setIsLaunched(false);
+    setStep(targetStep);
+  }, []);
 
   // Show loading state while checking auth
   if (authLoading) {
@@ -193,67 +203,206 @@ export function OnboardingPage() {
     );
   }
 
-  // Determine if we should show map (step 3+)
+  // Workspace mode (after launching)
+  if (isLaunched) {
+    return (
+      <div className="h-screen bg-gray-50 flex overflow-hidden">
+        <WorkspaceSidebar 
+          data={data}
+          user={user}
+          onEditCriteria={handleEditCriteria}
+          expanded={workspaceSidebarExpanded}
+          onToggleExpand={() => setWorkspaceSidebarExpanded(!workspaceSidebarExpanded)}
+        />
+        <main className="flex-1 flex min-w-0 overflow-hidden">
+          {/* Prospect List */}
+          <div className={cn(
+            "flex-1 flex flex-col min-w-0 overflow-hidden transition-all duration-300",
+            mapExpanded ? "" : "flex-1"
+          )}>
+            <StepResults 
+              data={data}
+              updateData={updateData}
+              onComplete={() => {}} // No longer used in workspace mode
+              onBack={() => setIsLaunched(false)}
+              isSaving={isSaving}
+              isWorkspaceMode={true}
+            />
+          </div>
+          
+          {/* Map Panel - Collapsible */}
+          <div className={cn(
+            "border-l border-gray-200 bg-gray-100 relative transition-all duration-300 flex flex-col",
+            mapExpanded ? "w-1/2" : "w-0"
+          )}>
+            {/* Map Toggle Button */}
+            <button
+              onClick={() => setMapExpanded(!mapExpanded)}
+              className={cn(
+                "absolute top-4 z-20 w-8 h-8 bg-white border border-gray-200 rounded-lg flex items-center justify-center shadow-sm hover:bg-gray-50 hover:shadow-md transition-all",
+                mapExpanded ? "left-4" : "-left-10"
+              )}
+              aria-label={mapExpanded ? 'Hide map' : 'Show map'}
+            >
+              {mapExpanded ? (
+                <ChevronRight className="w-4 h-4 text-gray-600" />
+              ) : (
+                <ChevronLeft className="w-4 h-4 text-gray-600" />
+              )}
+            </button>
+            
+            {mapExpanded && (
+              <div className="flex-1 min-h-0">
+                <OnboardingMap data={data} step={5} />
+              </div>
+            )}
+          </div>
+          
+          {/* Collapsed Map Toggle Button (when map is hidden) */}
+          {!mapExpanded && (
+            <div className="w-12 border-l border-gray-200 bg-gray-50 flex flex-col items-center py-4">
+              <button
+                onClick={() => setMapExpanded(true)}
+                className="w-10 h-10 bg-white border border-gray-200 rounded-lg flex items-center justify-center shadow-sm hover:bg-gray-50 hover:shadow-md transition-all"
+                aria-label="Show map"
+                title="Show map"
+              >
+                <ChevronLeft className="w-4 h-4 text-gray-600" />
+              </button>
+              <span className="text-xs text-gray-500 mt-2 writing-mode-vertical" style={{ writingMode: 'vertical-rl' }}>
+                Map View
+              </span>
+            </div>
+          )}
+        </main>
+      </div>
+    );
+  }
+
+  // Onboarding mode
   const showMap = step >= 3;
-  
-  // Determine if we should show the full header (step 2+)
   const showFullHeader = step >= 2;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Minimal Sidebar */}
+    <div className="h-screen bg-gray-50 flex overflow-hidden">
+      {/* Collapsible Sidebar */}
       <aside className={cn(
-        "w-16 bg-white border-r border-gray-200 flex flex-col items-center py-6 transition-all duration-300",
-        step >= 3 && "w-64"
+        "bg-white border-r border-gray-200 flex flex-col transition-all duration-300 relative",
+        sidebarExpanded ? "w-64" : "w-16"
       )}>
-        {/* Logo */}
-        <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center mb-8">
-          <Crosshair className="w-5 h-5 text-white" strokeWidth={2.5} />
-        </div>
-        
-        {/* Step indicator - only show when sidebar is expanded */}
-        {step >= 3 && (
-          <div className="flex-1 w-full px-4">
-            <nav className="space-y-2">
+        <div className={cn(
+          "flex flex-col h-full py-6",
+          sidebarExpanded ? "items-stretch px-0" : "items-center px-0"
+        )}>
+          {/* Logo and App Name */}
+          <div className={cn(
+            "flex items-center mb-8",
+            sidebarExpanded ? "px-4 gap-2.5" : "justify-center"
+          )}>
+            <Link 
+              to={user ? '/discover' : '/'}
+              className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center hover:bg-primary/90 transition-colors flex-shrink-0"
+              title={user ? 'Go to Dashboard' : 'Go to Home'}
+            >
+              <Crosshair className="w-5 h-5 text-white" strokeWidth={2.5} />
+            </Link>
+            {sidebarExpanded && (
+              <span className="font-bold text-xl tracking-tight text-gray-900">
+                Riplacer
+              </span>
+            )}
+          </div>
+          
+          {/* Step indicator */}
+          <div className={cn(
+            "flex-1",
+            sidebarExpanded ? "w-full px-4" : "w-full flex flex-col items-center"
+          )}>
+            <nav className={cn(
+              sidebarExpanded ? "space-y-2" : "space-y-2 flex flex-col items-center"
+            )}>
               {[
                 { num: 1, label: 'Product' },
                 { num: 2, label: 'Territory' },
                 { num: 3, label: 'Buyers' },
                 { num: 4, label: 'Competitors' },
-                { num: 5, label: 'Prospects' },
-              ].map((item) => (
-                <div
-                  key={item.num}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-                    step === item.num 
-                      ? "bg-primary/10 text-primary font-medium" 
-                      : step > item.num 
-                        ? "text-gray-600" 
-                        : "text-gray-400"
-                  )}
-                >
-                  <div className={cn(
-                    "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
-                    step === item.num 
-                      ? "bg-primary text-white" 
-                      : step > item.num 
-                        ? "bg-gray-200 text-gray-600"
-                        : "bg-gray-100 text-gray-400"
-                  )}>
-                    {item.num}
-                  </div>
-                  {item.label}
-                </div>
-              ))}
+                { num: 5, label: 'Launch' },
+              ].map((item) => {
+                const isClickable = item.num <= step;
+                const isCurrentStep = step === item.num;
+                
+                return (
+                  <button
+                    key={item.num}
+                    onClick={() => {
+                      if (isClickable) {
+                        setStep(item.num);
+                      }
+                    }}
+                    disabled={!isClickable}
+                    className={cn(
+                      "transition-all duration-200 w-full text-left",
+                      sidebarExpanded 
+                        ? "flex items-center gap-3 px-3 py-2 rounded-lg text-sm"
+                        : "w-8 h-8 flex items-center justify-center rounded-md",
+                      isClickable 
+                        ? "hover:bg-gray-50 cursor-pointer" 
+                        : "cursor-not-allowed opacity-50",
+                      isCurrentStep && sidebarExpanded
+                        ? "bg-primary/10 text-primary font-medium"
+                        : ""
+                    )}
+                    title={sidebarExpanded ? undefined : item.label}
+                  >
+                    <div className={cn(
+                      "rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 transition-all",
+                      sidebarExpanded ? "w-6 h-6" : "w-7 h-7",
+                      isCurrentStep
+                        ? "bg-primary text-white shadow-sm" 
+                        : item.num < step
+                          ? sidebarExpanded
+                            ? "bg-gray-200 text-gray-700"
+                            : "bg-gray-100 text-gray-500 border border-gray-200"
+                          : sidebarExpanded
+                            ? "bg-gray-100 text-gray-400"
+                            : "bg-transparent text-gray-300 border border-gray-200"
+                    )}>
+                      {item.num}
+                    </div>
+                    {sidebarExpanded && (
+                      <span className={cn(
+                        "truncate",
+                        isCurrentStep
+                          ? "text-primary font-medium"
+                          : item.num < step
+                            ? "text-gray-700"
+                            : "text-gray-400"
+                      )}>{item.label}</span>
+                    )}
+                  </button>
+                );
+              })}
             </nav>
           </div>
-        )}
+        </div>
+        
+        {/* Toggle Button */}
+        <button
+          onClick={() => setSidebarExpanded(!sidebarExpanded)}
+          className="absolute top-20 -right-3 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm hover:bg-gray-50 hover:shadow-md transition-all z-10"
+          aria-label={sidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+        >
+          {sidebarExpanded ? (
+            <ChevronLeft className="w-3 h-3 text-gray-600" />
+          ) : (
+            <ChevronRight className="w-3 h-3 text-gray-600" />
+          )}
+        </button>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col">
-        {/* Header - builds up progressively */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header */}
         {showFullHeader && (
           <OnboardingHeader 
             data={data} 
@@ -264,15 +413,27 @@ export function OnboardingPage() {
 
         {/* Content Area */}
         <div className={cn(
-          "flex-1 flex",
-          !showMap && "items-center justify-center"
+          "flex-1 flex min-h-0 relative",
+          step === 1 ? "" : !showMap && "items-center justify-center"
         )}>
+          {/* Background pattern */}
+          {!showMap && step !== 1 && (
+            <div 
+              className="absolute inset-0 opacity-[0.03] pointer-events-none" 
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+              }} 
+            />
+          )}
+          
           {/* Left Panel - Questions */}
           <div className={cn(
-            "transition-all duration-300",
-            showMap 
-              ? "w-1/2 border-r border-gray-200 overflow-y-auto" 
-              : "w-full max-w-2xl mx-auto px-8"
+            "transition-all duration-300 flex flex-col relative z-10",
+            step === 1 
+              ? "w-full"
+              : showMap 
+                ? "w-1/2 border-r border-gray-200 overflow-y-auto" 
+                : "w-full max-w-2xl mx-auto px-8"
           )}>
             {step === 1 && (
               <StepWhatYouSell 
@@ -309,16 +470,17 @@ export function OnboardingPage() {
               <StepResults 
                 data={data}
                 updateData={updateData}
-                onComplete={handleComplete}
+                onComplete={handleLaunch}
                 onBack={prevStep}
                 isSaving={isSaving}
+                isWorkspaceMode={false}
               />
             )}
           </div>
 
-          {/* Right Panel - Map (appears at step 3) */}
+          {/* Right Panel - Map */}
           {showMap && (
-            <div className="w-1/2 bg-gray-100 relative">
+            <div className="w-1/2 bg-gray-100 relative min-w-0 overflow-hidden">
               <OnboardingMap data={data} step={step} />
             </div>
           )}

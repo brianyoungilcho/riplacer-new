@@ -70,7 +70,8 @@ export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYo
   );
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col relative overflow-hidden">
+      
       {/* Filter Pills - Show territory selections */}
       {territoryFilters.length > 0 && (
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
@@ -131,7 +132,12 @@ export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYo
       <div className="p-6 border-t border-gray-200 bg-white">
         <div className="max-w-lg mx-auto flex gap-3">
           <Button
-            onClick={onBack}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onBack();
+            }}
             variant="outline"
             className="flex-1 h-12 text-base font-medium rounded-xl"
           >

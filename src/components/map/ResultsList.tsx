@@ -1,15 +1,56 @@
 import { MapSearchResult } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import { Globe, Phone, ChevronRight } from 'lucide-react';
+import { Globe, Phone, ChevronRight, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { Link } from 'react-router-dom';
 
 interface ResultsListProps {
   results: MapSearchResult[];
   onResultClick: (result: MapSearchResult) => void;
   selectedId?: string;
+  onFavorite: (prospectId: string, favorited: boolean) => void;
 }
 
-export function ResultsList({ results, onResultClick, selectedId }: ResultsListProps) {
+export function ResultsList({ results, onResultClick, selectedId, onFavorite }: ResultsListProps) {
+  const { user } = useAuth();
+  const [favoritedIds, setFavoritedIds] = useState(new Set());
+
+  useEffect(() => {
+    // Load favorited from localStorage or Supabase
+    if (user) {
+      // Mock: fetch from favorites table
+      const mockFavorited = results.slice(0, 2).map(p => p.place_id); // Simulate some favorited
+      setFavoritedIds(new Set(mockFavorited));
+    } else {
+      const saved = localStorage.getItem('riplacer_favorites');
+      if (saved) {
+        setFavoritedIds(new Set(JSON.parse(saved)));
+      }
+    }
+  }, [results, user]);
+
+  const toggleFavorite = async (prospectId) => {
+    const newFavorited = new Set(favoritedIds);
+    if (newFavorited.has(prospectId)) {
+      newFavorited.delete(prospectId);
+    } else {
+      newFavorited.add(prospectId);
+    }
+    setFavoritedIds(newFavorited);
+
+    if (user) {
+      // Mock Supabase insert/delete
+      console.log('Saving favorite to DB:', prospectId);
+    } else {
+      localStorage.setItem('riplacer_favorites', JSON.stringify(Array.from(newFavorited)));
+    }
+
+    if (onFavorite) onFavorite(prospectId, newFavorited.has(prospectId));
+  };
+
   if (results.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
@@ -56,8 +97,38 @@ export function ResultsList({ results, onResultClick, selectedId }: ResultsListP
                 )}
               </div>
             </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFavorite(result.place_id);
+              }}
+              className={cn(
+                "p-2 rounded-full transition-colors",
+                favoritedIds.has(result.place_id)
+                  ? "bg-yellow-500/20 text-yellow-400"
+                  : "text-gray-500 hover:text-yellow-400 hover:bg-yellow-500/10"
+              )}
+              title={favoritedIds.has(result.place_id) ? 'Unfavorite' : 'Favorite'}
+            >
+              <Star 
+                className={cn("w-5 h-5", favoritedIds.has(result.place_id) && "fill-current")} 
+              />
+            </button>
             <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0" />
           </div>
+
+          {/* Footer link if favorited */}
+          {favoritedIds.has(result.place_id) && (
+            <div className="mt-4 pt-3 border-t border-gray-700">
+              <Link 
+                to="/favorites" 
+                className="text-sm text-primary hover:underline flex items-center gap-1"
+              >
+                View in Favorites
+                <ChevronRight className="w-3 h-3" />
+              </Link>
+            </div>
+          )}
         </div>
       ))}
     </div>

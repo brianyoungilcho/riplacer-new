@@ -13,7 +13,8 @@ import {
   LogOut,
   LogIn,
   User,
-  ChevronRight
+  ChevronRight,
+  Star
 } from 'lucide-react';
 
 interface AppLayoutProps {
@@ -23,6 +24,7 @@ interface AppLayoutProps {
 const navItems = [
   { href: '/discover', label: 'Discover', icon: Map },
   { href: '/targets', label: 'My Targets', icon: Target },
+  { href: '/favorites', label: 'Favorites', icon: Star },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -116,6 +118,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                 );
               }
               
+              // For Favorites, add mock badge if guest
+              const showMockBadge = isGuest && item.href === '/favorites';
+              
               return (
                 <Link
                   key={item.href}
@@ -129,7 +134,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                 >
                   <Icon className="w-5 h-5" />
                   {item.label}
-                  {isActive && (
+                  {showMockBadge && (
+                    <span className="ml-auto text-xs bg-yellow-900/50 text-yellow-400 px-1.5 py-0.5 rounded">Mock</span>
+                  )}
+                  {isActive && !showMockBadge && (
                     <ChevronRight className="w-4 h-4 ml-auto" />
                   )}
                 </Link>

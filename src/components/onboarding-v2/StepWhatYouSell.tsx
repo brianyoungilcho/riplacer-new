@@ -2,11 +2,7 @@ import { useState } from 'react';
 import { OnboardingData } from './OnboardingPage';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Sparkles } from 'lucide-react';
-import { toast } from 'sonner';
+import { ArrowRight, Loader2 } from 'lucide-react';
 
 interface StepWhatYouSellProps {
   data: OnboardingData;
@@ -15,196 +11,104 @@ interface StepWhatYouSellProps {
 }
 
 export function StepWhatYouSell({ data, updateData, onNext }: StepWhatYouSellProps) {
-  const { signInWithGoogle } = useAuth();
-  const [description, setDescription] = useState(data.productDescription);
-  const [websiteUrl, setWebsiteUrl] = useState(data.companyDomain || '');
-  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [input, setInput] = useState(data.companyDomain || data.productDescription || '');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  const handleContinue = () => {
-    if (description.trim()) {
-      updateData({ productDescription: description.trim() });
-      onNext();
-    }
-  };
+  const isValid = input.trim().length > 0;
 
-  const handleAnalyzeWebsite = async () => {
-    if (!websiteUrl.trim()) {
-      toast.error('Please enter a website URL');
-      return;
-    }
-
-    // Normalize URL
-    let url = websiteUrl.trim();
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'https://' + url;
-    }
-
+  const handleContinue = async () => {
+    if (!isValid) return;
+    
     setIsAnalyzing(true);
-    try {
-      const { data: result, error } = await supabase.functions.invoke('analyze-company', {
-        body: { website_url: url }
-      });
-
-      if (error) throw error;
-
-      if (result.error) {
-        toast.error(result.error);
-        return;
-      }
-
-      // Update form with AI analysis
-      const newDescription = result.selling_proposition || '';
-      setDescription(newDescription);
+    
+    const trimmedInput = input.trim();
+    
+    // Check if input looks like a URL/domain
+    const isUrl = /^[a-zA-Z0-9][a-zA-Z0-9-]*(\.[a-zA-Z]{2,})+/.test(trimmedInput.replace(/^https?:\/\//, '').replace(/^www\./, ''));
+    
+    if (isUrl) {
+      // Clean up URL
+      let cleanUrl = trimmedInput.toLowerCase();
+      cleanUrl = cleanUrl.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
       
-      updateData({
-        productDescription: newDescription,
-        companyName: result.company_name || undefined,
-        companyDomain: url,
-        competitors: result.competitors || [],
+      updateData({ 
+        companyDomain: cleanUrl,
+        companyName: cleanUrl.split('.')[0].charAt(0).toUpperCase() + cleanUrl.split('.')[0].slice(1),
+        productDescription: `Products and services from ${cleanUrl}`
       });
-
-      toast.success('Website analyzed! Review the description below.');
-    } catch (error) {
-      console.error('Analysis error:', error);
-      toast.error('Failed to analyze website. Try entering your description manually.');
-    } finally {
-      setIsAnalyzing(false);
+    } else {
+      // It's a description
+      updateData({ 
+        productDescription: trimmedInput,
+        companyDomain: undefined,
+        companyName: undefined
+      });
     }
+    
+    // Brief delay for UX
+    await new Promise(resolve => setTimeout(resolve, 600));
+    
+    setIsAnalyzing(false);
+    onNext();
   };
 
-  const handleGoogleSignIn = async () => {
-    setIsSigningIn(true);
-    try {
-      const { error } = await signInWithGoogle();
-      if (error) {
-        toast.error('Sign in failed. Please try again.');
-      }
-    } catch (error) {
-      console.error('Sign in failed:', error);
-      toast.error('Sign in failed. Please try again.');
-    } finally {
-      setIsSigningIn(false);
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey && isValid && !isAnalyzing) {
+      e.preventDefault();
+      handleContinue();
     }
   };
-
-  const canContinue = description.trim().length > 0;
 
   return (
-    <div className="py-20 px-8">
-      <div className="max-w-xl mx-auto">
+    <div className="flex-1 flex items-center justify-center px-8 relative overflow-hidden">
+      {/* Subtle dotted background pattern */}
+      <div 
+        className="absolute inset-0 opacity-[0.03]" 
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+        }} 
+      />
+      
+      <div className="w-full max-w-lg text-center relative z-10">
         {/* Title */}
-        <h1 className="text-4xl font-bold text-gray-900 text-center mb-4">
+        <h1 className="text-3xl font-semibold text-gray-900 mb-3 tracking-tight">
           What are you selling?
         </h1>
-        
-        <p className="text-gray-600 text-center mb-12">
-          Tell us what you are trying to sell. You can be as descriptive as possible, or simply drop your company's URL.
+        <p className="text-gray-500 mb-8">
+          Drop your website or describe your product.
         </p>
 
-        {/* Website URL Input */}
-        <div className="mb-6">
-          <div className="flex gap-2">
-            <Input
-              value={websiteUrl}
-              onChange={(e) => setWebsiteUrl(e.target.value)}
-              placeholder="yourcompany.com"
-              className="flex-1 h-12 text-base border-gray-300 focus:border-gray-400 focus:ring-0 rounded-xl"
-              onKeyDown={(e) => e.key === 'Enter' && handleAnalyzeWebsite()}
-            />
-            <Button
-              onClick={handleAnalyzeWebsite}
-              disabled={isAnalyzing || !websiteUrl.trim()}
-              variant="outline"
-              className="h-12 px-4 rounded-xl border-gray-300"
-            >
-              {isAnalyzing ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Sparkles className="w-5 h-5" />
-              )}
-            </Button>
-          </div>
-          <p className="text-sm text-gray-500 mt-2">
-            Enter your website and we'll analyze it with AI
-          </p>
-        </div>
-
-        {/* Divider */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="flex-1 h-px bg-gray-200" />
-          <span className="text-sm text-gray-500 font-medium">OR</span>
-          <div className="flex-1 h-px bg-gray-200" />
-        </div>
-
-        {/* Text Input */}
+        {/* Single textarea - left-aligned text */}
         <Textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="e.g., Body-worn cameras and fleet safety solutions for law enforcement agencies..."
-          className="min-h-[120px] text-base resize-none border-gray-300 focus:border-gray-400 focus:ring-0 rounded-xl mb-6"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="axon.com or 'Body-worn cameras for law enforcement...'"
+          className="min-h-[120px] text-base resize-none border-gray-200 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-gray-400 placeholder:text-gray-400 bg-white"
+          autoFocus
         />
 
-        {/* Continue Button */}
+        {/* Continue button */}
         <Button
           onClick={handleContinue}
-          disabled={!canContinue}
-          className="w-full h-12 text-base font-medium rounded-xl"
-          variant={canContinue ? "default" : "outline"}
+          disabled={!isValid || isAnalyzing}
+          className="w-full mt-6 h-12 bg-primary hover:bg-primary/90 text-white rounded-xl"
         >
-          Continue
-        </Button>
-
-        {/* Divider */}
-        <div className="flex items-center gap-4 my-8">
-          <div className="flex-1 h-px bg-gray-200" />
-          <span className="text-sm text-gray-500 font-medium">OR</span>
-          <div className="flex-1 h-px bg-gray-200" />
-        </div>
-
-        {/* Google Sign In */}
-        <Button
-          onClick={handleGoogleSignIn}
-          disabled={isSigningIn}
-          variant="outline"
-          className="w-full h-12 text-base font-medium rounded-xl border-gray-300 hover:bg-gray-50"
-        >
-          {isSigningIn ? (
-            <>
-              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              Signing in...
-            </>
+          {isAnalyzing ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
             <>
-              <GoogleIcon className="w-5 h-5 mr-2" />
-              Log in to let us consolidate your company's offering
+              Continue
+              <ArrowRight className="w-4 h-4 ml-2" />
             </>
           )}
         </Button>
+
+        {/* Helper text */}
+        <p className="text-sm text-gray-400 mt-4">
+          We'll figure out what you're selling either way
+        </p>
       </div>
     </div>
-  );
-}
-
-function GoogleIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24">
-      <path
-        fill="#4285F4"
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-      />
-    </svg>
   );
 }

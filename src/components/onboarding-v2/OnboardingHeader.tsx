@@ -2,6 +2,20 @@ import { OnboardingData } from './OnboardingPage';
 import { User } from '@supabase/supabase-js';
 import { User as UserIcon } from 'lucide-react';
 
+// State abbreviations for compact display
+const STATE_ABBREV: Record<string, string> = {
+  'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
+  'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
+  'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
+  'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
+  'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
+  'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
+  'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH',
+  'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+  'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
+  'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY',
+};
+
 interface OnboardingHeaderProps {
   data: OnboardingData;
   step: number;
@@ -9,34 +23,51 @@ interface OnboardingHeaderProps {
 }
 
 export function OnboardingHeader({ data, step, user }: OnboardingHeaderProps) {
+  // Only show territory info AFTER step 2 is completed (step >= 3)
+  const showTerritoryPills = step >= 3 && (data.states.length > 0 || data.territoryDescription);
+  
   return (
-    <header className="h-16 border-b border-gray-200 bg-white px-6 flex items-center justify-between">
-      {/* Left side - Product description pill */}
-      <div className="flex items-center gap-4">
+    <header className="h-14 border-b border-gray-200 bg-white px-6 flex items-center justify-between">
+      {/* Left side - Product description */}
+      <div className="flex items-center gap-3">
         {data.productDescription && (
-          <div className="px-4 py-2 bg-gray-100 rounded-lg border border-gray-200 text-sm">
-            {data.productDescription.length > 40 
-              ? data.productDescription.slice(0, 40) + '...' 
+          <div className="px-4 py-1.5 bg-gray-100 rounded-lg text-sm text-gray-700">
+            {data.productDescription.length > 50 
+              ? data.productDescription.slice(0, 50) + '...' 
               : data.productDescription}
           </div>
         )}
 
-        {/* Territory selector (step 2+) */}
-        {step >= 2 && (
-          <TerritoryTabs data={data} />
+        {/* Territory pills - only show after step 2 is done */}
+        {showTerritoryPills && (
+          <div className="flex items-center gap-2">
+            {data.states.slice(0, 5).map(state => (
+              <span 
+                key={state} 
+                className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-600"
+              >
+                {STATE_ABBREV[state] || state}
+              </span>
+            ))}
+            {data.states.length > 5 && (
+              <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-500">
+                +{data.states.length - 5}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Right side - Company info & profile */}
+      {/* Right side - Company domain & profile */}
       <div className="flex items-center gap-3">
         {data.companyDomain && (
-          <div className="px-4 py-2 bg-gray-100 rounded-lg border border-gray-200 text-sm font-medium">
+          <div className="px-3 py-1.5 bg-gray-100 rounded-lg text-sm text-gray-600">
             {data.companyDomain}
           </div>
         )}
         
         {user ? (
-          <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
             {user.user_metadata?.avatar_url ? (
               <img 
                 src={user.user_metadata.avatar_url} 
@@ -44,65 +75,15 @@ export function OnboardingHeader({ data, step, user }: OnboardingHeaderProps) {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <UserIcon className="w-5 h-5 text-gray-500" />
+              <UserIcon className="w-4 h-4 text-gray-500" />
             )}
           </div>
         ) : (
-          <div className="w-9 h-9 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center">
-            <UserIcon className="w-5 h-5 text-gray-400" />
+          <div className="w-8 h-8 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center">
+            <UserIcon className="w-4 h-4 text-gray-400" />
           </div>
         )}
       </div>
     </header>
-  );
-}
-
-function TerritoryTabs({ data }: { data: OnboardingData }) {
-  const hasTerritory = data.region || data.states.length > 0 || data.cities.length > 0;
-  
-  if (!hasTerritory && !data.territoryDescription) {
-    return (
-      <div className="flex items-center border border-gray-200 rounded-full overflow-hidden bg-white">
-        <button className="px-6 py-2 text-sm text-gray-500 hover:bg-gray-50 transition-colors border-r border-gray-200">
-          Region
-        </button>
-        <span className="text-gray-300 px-1">|</span>
-        <button className="px-6 py-2 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
-          State
-        </button>
-        <span className="text-gray-300 px-1">|</span>
-        <button className="px-6 py-2 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
-          Cities
-        </button>
-        <button className="px-4 py-2 text-sm font-medium bg-gray-900 text-white rounded-full ml-2">
-          Describe
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-2">
-      {data.region && (
-        <span className="px-3 py-1.5 bg-gray-100 rounded-full text-sm border border-gray-200">
-          {data.region}
-        </span>
-      )}
-      {data.states.map(state => (
-        <span key={state} className="px-3 py-1.5 bg-gray-100 rounded-full text-sm border border-gray-200">
-          {state}
-        </span>
-      ))}
-      {data.cities.slice(0, 3).map(city => (
-        <span key={city} className="px-3 py-1.5 bg-gray-100 rounded-full text-sm border border-gray-200">
-          {city}
-        </span>
-      ))}
-      {data.cities.length > 3 && (
-        <span className="px-3 py-1.5 bg-gray-100 rounded-full text-sm border border-gray-200">
-          +{data.cities.length - 3} more
-        </span>
-      )}
-    </div>
   );
 }
