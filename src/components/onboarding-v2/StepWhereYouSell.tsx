@@ -259,7 +259,7 @@ export function StepWhereYouSell({ data, updateData, onNext, onBack }: StepWhere
           onClick={() => setShowDescribe(true)}
           className="block w-full text-center text-sm text-primary hover:underline mt-8 mb-6"
         >
-          Skip — I'll describe my territory instead →
+          I'll describe my territory instead →
         </button>
 
         {/* Action Buttons */}

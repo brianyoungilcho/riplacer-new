@@ -3,7 +3,7 @@ import { OnboardingData } from './OnboardingPage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { Check, Plus, X, Loader2, Sparkles } from 'lucide-react';
+import { Check, Plus, X, Loader2 } from 'lucide-react';
 
 interface StepCompetitorsProps {
   data: OnboardingData;
@@ -188,14 +188,8 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
           <div>
             <div className="flex items-center gap-2 mb-2">
               <label className="text-sm font-medium text-gray-700">
-                {hasAISuggestions ? 'AI-suggested competitors' : 'Suggested competitors'}
+                Suggested competitors
               </label>
-              {hasAISuggestions && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
-                  <Sparkles className="w-3 h-3" />
-                  AI
-                </span>
-              )}
               {isResearchLoading && (
                 <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
                   <Loader2 className="w-3 h-3 animate-spin" />
