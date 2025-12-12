@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { Star, ChevronDown, ChevronUp, ExternalLink, Loader2, Search, SlidersHorizontal, ArrowUpDown, X, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 interface DiscoveryTabProps {
   data: OnboardingData;
   onProspectSelect?: (prospect: Prospect | null) => void;
@@ -47,79 +48,7 @@ const parseContractValue = (value: string): number => {
   }
   return 0;
 };
-
-// State center coordinates for generating prospect locations
-const STATE_COORDINATES: Record<string, { lat: number; lng: number }> = {
-  'Connecticut': { lat: 41.6032, lng: -72.7554 },
-  'Delaware': { lat: 38.9108, lng: -75.5277 },
-  'Maine': { lat: 45.2538, lng: -69.4455 },
-  'Maryland': { lat: 39.0458, lng: -76.6413 },
-  'Massachusetts': { lat: 42.4072, lng: -71.3824 },
-  'New Hampshire': { lat: 43.1939, lng: -71.5724 },
-  'New Jersey': { lat: 40.0583, lng: -74.4057 },
-  'New York': { lat: 43.2994, lng: -75.4999 },
-  'Pennsylvania': { lat: 41.2033, lng: -77.1945 },
-  'Rhode Island': { lat: 41.5801, lng: -71.4774 },
-  'Vermont': { lat: 44.5588, lng: -72.5778 },
-  // Add more states as needed
-  'California': { lat: 36.7783, lng: -119.4179 },
-  'Texas': { lat: 31.9686, lng: -99.9018 },
-  'Florida': { lat: 27.6648, lng: -81.5158 },
-  'Illinois': { lat: 40.6331, lng: -89.3985 },
-  'Ohio': { lat: 40.4173, lng: -82.9071 },
-};
-
-// Mock data generator for infinite scroll simulation
-const generateMockProspects = (page: number, pageSize: number, selectedStates: string[]): Prospect[] => {
-  const baseProspects = [
-    { name: 'Havensville PD', highlight: 'Contract Expiring', highlightType: 'timing' as const, contractValue: '$500,000/yr', angle: 'Current contract with ShotSpotter expires March 2025. Recent city council meeting notes indicate budget concerns with renewal pricing.' },
-    { name: 'Tontown PD', highlight: 'New Leadership', highlightType: 'opportunity' as const, contractValue: '$250,000/yr', angle: 'New police chief hired from neighboring county where they successfully implemented body cameras.' },
-    { name: 'Chelsea PD', highlight: 'Competitor Issues', highlightType: 'weakness' as const, contractValue: '$125,000/yr', angle: 'Current vendor (Axon) facing class action lawsuit over data privacy concerns.' },
-    { name: 'Riverside Sheriff', highlight: 'Budget Increase', highlightType: 'opportunity' as const, contractValue: '$180,000/yr', angle: 'County approved 15% increase to sheriff department technology budget for FY2025.' },
-    { name: 'Millbrook PD', highlight: 'RFP Open', highlightType: 'timing' as const, contractValue: '$95,000/yr', angle: 'Active RFP for body-worn camera solution. Deadline is January 15, 2025.' },
-    { name: 'Greenfield PD', highlight: 'New Funding', highlightType: 'opportunity' as const, contractValue: '$320,000/yr', angle: 'Received federal grant for public safety technology modernization.' },
-    { name: 'Lakewood Sheriff', highlight: 'Contract Review', highlightType: 'timing' as const, contractValue: '$275,000/yr', angle: 'Annual contract review scheduled for Q1 2025. Previous complaints about service quality.' },
-    { name: 'Summit City PD', highlight: 'Leadership Change', highlightType: 'opportunity' as const, contractValue: '$150,000/yr', angle: 'New IT director with background in modern cloud solutions.' },
-  ];
-
-  // Use selected states for generating coordinates, fallback to all if none selected
-  const availableStates = selectedStates.length > 0 
-    ? selectedStates.filter(s => STATE_COORDINATES[s])
-    : Object.keys(STATE_COORDINATES);
-
-  return Array.from({ length: pageSize }, (_, i) => {
-    const idx = (page * pageSize + i) % baseProspects.length;
-    const base = baseProspects[idx];
-    const id = `prospect-${page}-${i}`;
-    const score = Math.max(50, 95 - (page * 3) - Math.floor(Math.random() * 10));
-    
-    // Pick a random state from available states
-    const stateIdx = (page * pageSize + i) % availableStates.length;
-    const stateName = availableStates[stateIdx];
-    const stateCoords = STATE_COORDINATES[stateName] || { lat: 40, lng: -74 };
-    
-    return {
-      id,
-      name: `${base.name}${page > 0 ? ` #${page * pageSize + i + 1}` : ''}`,
-      score,
-      contractValue: base.contractValue,
-      highlight: base.highlight,
-      highlightType: base.highlightType,
-      riplaceAngle: base.angle,
-      sources: [
-        { label: 'City Council Minutes', url: '#' },
-        { label: 'Budget Report', url: '#' },
-      ],
-      lastUpdated: '2025.12.06',
-      lat: stateCoords.lat + (Math.random() - 0.5) * 1.5, // Spread within state
-      lng: stateCoords.lng + (Math.random() - 0.5) * 1.5,
-      state: stateName,
-    };
-  });
-};
-
-const PAGE_SIZE = 15;
-const TOTAL_MOCK_PROSPECTS = 247;
+const PAGE_SIZE = 10;
 
 export function DiscoveryTab({ data, onProspectSelect, onProspectsChange, selectedProspectId }: DiscoveryTabProps) {
   const { user } = useAuth();
@@ -254,18 +183,66 @@ export function DiscoveryTab({ data, onProspectSelect, onProspectsChange, select
     }
   }, [selectedProspectId]);
 
-  // Initial load - generate prospects for selected states
+  // Initial load - fetch prospects from API
   useEffect(() => {
-    setIsLoading(true);
-    // Simulate API delay
-    const timer = setTimeout(() => {
-      const initial = generateMockProspects(0, PAGE_SIZE, data.states);
-      setProspects(initial);
-      setIsLoading(false);
-      setHasMore(initial.length < TOTAL_MOCK_PROSPECTS);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [data.states]);
+    const fetchProspects = async () => {
+      setIsLoading(true);
+      setProspects([]);
+      setPage(0);
+      
+      try {
+        console.log('🔍 [DiscoveryTab] Fetching prospects from API...');
+        const { data: response, error } = await supabase.functions.invoke('discover-prospects', {
+          body: {
+            productDescription: data.productDescription,
+            territory: { states: data.states },
+            targetCategories: data.targetCategories,
+            competitors: data.competitors,
+            page: 0,
+            pageSize: PAGE_SIZE,
+            existingProspectIds: [],
+          }
+        });
+
+        if (error) {
+          console.error('Discover prospects API error:', error);
+          toast.error('Failed to load prospects');
+          setIsLoading(false);
+          return;
+        }
+
+        console.log('✅ [DiscoveryTab] Prospects received:', response);
+        
+        if (response?.prospects && Array.isArray(response.prospects)) {
+          const mappedProspects: Prospect[] = response.prospects.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            score: p.score || 70,
+            contractValue: p.contractValue || '$100K/yr',
+            highlight: p.highlight || 'Opportunity',
+            highlightType: (p.highlightType as 'opportunity' | 'timing' | 'weakness') || 'opportunity',
+            riplaceAngle: p.riplaceAngle || '',
+            sources: p.sources || [],
+            lastUpdated: p.lastUpdated || new Date().toISOString(),
+            lat: p.lat,
+            lng: p.lng,
+            state: p.state,
+          }));
+          setProspects(mappedProspects);
+          setHasMore(response.hasMore ?? false);
+        }
+      } catch (err) {
+        console.error('Failed to fetch prospects:', err);
+        toast.error('Failed to load prospects');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (data.states?.length > 0) {
+      fetchProspects();
+    }
+  }, [data.states, data.productDescription, data.targetCategories, data.competitors]);
 
   // Load favorites from localStorage
   useEffect(() => {
@@ -304,21 +281,57 @@ export function DiscoveryTab({ data, onProspectSelect, onProspectsChange, select
     return () => observer.disconnect();
   }, [hasMore, isLoadingMore, isLoading, page]);
 
-  const loadMore = useCallback(() => {
+  const loadMore = useCallback(async () => {
     if (isLoadingMore || !hasMore) return;
     
     setIsLoadingMore(true);
     const nextPage = page + 1;
     
-    // Simulate API delay
-    setTimeout(() => {
-      const newProspects = generateMockProspects(nextPage, PAGE_SIZE, data.states);
-      setProspects(prev => [...prev, ...newProspects]);
-      setPage(nextPage);
-      setHasMore(prospects.length + newProspects.length < TOTAL_MOCK_PROSPECTS);
+    try {
+      const existingIds = prospects.map(p => p.id);
+      const { data: response, error } = await supabase.functions.invoke('discover-prospects', {
+        body: {
+          productDescription: data.productDescription,
+          territory: { states: data.states },
+          targetCategories: data.targetCategories,
+          competitors: data.competitors,
+          page: nextPage,
+          pageSize: PAGE_SIZE,
+          existingProspectIds: existingIds,
+        }
+      });
+
+      if (error) {
+        console.error('Load more error:', error);
+        setIsLoadingMore(false);
+        return;
+      }
+
+      if (response?.prospects && Array.isArray(response.prospects)) {
+        const mappedProspects: Prospect[] = response.prospects.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          score: p.score || 70,
+          contractValue: p.contractValue || '$100K/yr',
+          highlight: p.highlight || 'Opportunity',
+          highlightType: (p.highlightType as 'opportunity' | 'timing' | 'weakness') || 'opportunity',
+          riplaceAngle: p.riplaceAngle || '',
+          sources: p.sources || [],
+          lastUpdated: p.lastUpdated || new Date().toISOString(),
+          lat: p.lat,
+          lng: p.lng,
+          state: p.state,
+        }));
+        setProspects(prev => [...prev, ...mappedProspects]);
+        setPage(nextPage);
+        setHasMore(response.hasMore ?? false);
+      }
+    } catch (err) {
+      console.error('Load more failed:', err);
+    } finally {
       setIsLoadingMore(false);
-    }, 600);
-  }, [page, isLoadingMore, hasMore, prospects.length, data.states]);
+    }
+  }, [page, isLoadingMore, hasMore, prospects, data.states, data.productDescription, data.targetCategories, data.competitors]);
 
   const toggleExpand = (id: string) => {
     setExpandedId(prev => prev === id ? null : id);
