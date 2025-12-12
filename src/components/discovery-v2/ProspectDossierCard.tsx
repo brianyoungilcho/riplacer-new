@@ -20,6 +20,7 @@ interface ProspectDossierCardProps {
   isExpanded: boolean;
   onToggle: () => void;
   onGeneratePlan?: () => void;
+  showGeneratePlan?: boolean;
   className?: string;
 }
 
@@ -28,6 +29,7 @@ export function ProspectDossierCard({
   isExpanded, 
   onToggle, 
   onGeneratePlan,
+  showGeneratePlan = true,
   className 
 }: ProspectDossierCardProps) {
   const [showAllAngles, setShowAllAngles] = useState(false);
@@ -127,7 +129,7 @@ export function ProspectDossierCard({
           ) : isReady && dossier ? (
             <DossierContent 
               dossier={dossier} 
-              onGeneratePlan={onGeneratePlan}
+              onGeneratePlan={showGeneratePlan ? onGeneratePlan : undefined}
             />
           ) : (
             <div className="py-8 text-center">

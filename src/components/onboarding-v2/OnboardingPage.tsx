@@ -9,14 +9,14 @@ import { StepWhoYouSellTo } from './StepWhoYouSellTo';
 import { StepCompetitors } from './StepCompetitors';
 import { StepResults } from './StepResults';
 import { OnboardingMap } from './OnboardingMap';
-import { DiscoveryTab, SavedLeadsTab, SettingsTab, type Prospect } from './workspace';
+import { SavedLeadsTab, SettingsTab, type Prospect } from './workspace';
 import { DiscoveryV2Tab } from '@/components/discovery-v2';
-import { Crosshair, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Star, Settings, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { Crosshair, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Star, Settings, SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 
-type WorkspaceTab = 'discovery' | 'discovery-v2' | 'saved' | 'settings';
+type WorkspaceTab = 'discovery' | 'saved' | 'settings';
 
 export interface OnboardingData {
   // Step 1

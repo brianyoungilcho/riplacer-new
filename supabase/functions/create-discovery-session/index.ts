@@ -22,28 +22,18 @@ serve(async (req) => {
   }
 
   try {
-    // Get auth token from request
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Authorization required' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Verify user from token
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    // Try to get user from auth header (optional for anonymous sessions)
+    let userId: string | null = null;
+    const authHeader = req.headers.get('Authorization');
     
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user } } = await supabase.auth.getUser(token);
+      userId = user?.id || null;
     }
 
     const {
@@ -54,7 +44,7 @@ serve(async (req) => {
       companyDomain,
     } = await req.json();
 
-    console.log('Creating discovery session for user:', user.id);
+    console.log('Creating discovery session for user:', userId || 'anonymous');
 
     // Build criteria object
     const criteria = {
@@ -74,15 +64,21 @@ serve(async (req) => {
     }));
 
     // Check if session with same criteria exists (within last 24 hours)
-    const { data: existingSession } = await supabase
-      .from('discovery_sessions')
-      .select('id, status, created_at')
-      .eq('user_id', user.id)
-      .eq('criteria_hash', criteriaHash)
-      .gt('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // For authenticated users, check their sessions; for anon, check by hash only
+    let existingSession = null;
+    
+    if (userId) {
+      const { data } = await supabase
+        .from('discovery_sessions')
+        .select('id, status, created_at')
+        .eq('user_id', userId)
+        .eq('criteria_hash', criteriaHash)
+        .gt('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      existingSession = data;
+    }
 
     if (existingSession) {
       console.log('Returning existing session:', existingSession.id);
@@ -96,11 +92,11 @@ serve(async (req) => {
       );
     }
 
-    // Create new session
+    // Create new session (user_id can be null for anonymous)
     const { data: session, error: insertError } = await supabase
       .from('discovery_sessions')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         criteria,
         criteria_hash: criteriaHash,
         status: 'created',
@@ -116,13 +112,14 @@ serve(async (req) => {
       );
     }
 
-    console.log('Created new session:', session.id);
+    console.log('Created new session:', session.id, 'anonymous:', !userId);
 
     return new Response(
       JSON.stringify({
         sessionId: session.id,
         status: 'created',
         isExisting: false,
+        isAnonymous: !userId,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

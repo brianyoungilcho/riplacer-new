@@ -117,6 +117,7 @@ export interface DiscoverySession {
   createdAt: string;
   updatedAt?: string;
   criteria?: DiscoverySessionCriteria;
+  isAnonymous?: boolean;
 }
 
 export interface DiscoverySessionState {
@@ -141,17 +142,12 @@ export function useDiscoverySession() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Create a new discovery session
+  // Create a new discovery session (works for both auth and anon users)
   const createSession = useCallback(async (criteria: DiscoverySessionCriteria) => {
     setIsCreating(true);
     setError(null);
 
     try {
-      const { data: { session: authSession } } = await supabase.auth.getSession();
-      if (!authSession?.access_token) {
-        throw new Error('Please sign in to use deep research');
-      }
-
       const { data, error: fnError } = await supabase.functions.invoke('create-discovery-session', {
         body: criteria,
       });
@@ -163,6 +159,7 @@ export function useDiscoverySession() {
         status: data.status,
         createdAt: new Date().toISOString(),
         criteria,
+        isAnonymous: data.isAnonymous,
       };
 
       setSessionState(prev => ({
@@ -211,7 +208,7 @@ export function useDiscoverySession() {
     }
   }, []);
 
-  // Discover prospects (v2)
+  // Discover prospects (v2) - works for both auth and anon
   const discoverProspects = useCallback(async (sessionId: string, criteria: DiscoverySessionCriteria, limit = 8) => {
     try {
       const { data, error: fnError } = await supabase.functions.invoke('discover-prospects-v2', {
@@ -242,7 +239,7 @@ export function useDiscoverySession() {
     }
   }, []);
 
-  // Research competitive advantages
+  // Research competitive advantages - works for both auth and anon
   const researchAdvantages = useCallback(async (sessionId: string, criteria: DiscoverySessionCriteria) => {
     try {
       const { data, error: fnError } = await supabase.functions.invoke('research-competitive-advantages', {
@@ -272,7 +269,7 @@ export function useDiscoverySession() {
     }
   }, []);
 
-  // Generate account plan
+  // Generate account plan (requires auth)
   const generateAccountPlan = useCallback(async (sessionId: string, prospectId: string, repNotes?: string) => {
     try {
       const { data, error: fnError } = await supabase.functions.invoke('generate-account-plan', {

@@ -1,11 +1,14 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscoverySession, type DiscoverySessionCriteria, type DiscoveryProspect } from '@/hooks/useDiscoverySession';
 import { useDiscoveryPolling } from '@/hooks/useDiscoveryPolling';
 import { ResearchProgress, AdvantagesBrief, ProspectDossierCard, AccountPlanView, type AccountPlan } from '@/components/discovery-v2';
-import { Loader2, Sparkles, RefreshCw, ChevronRight } from 'lucide-react';
+import { Loader2, Sparkles, RefreshCw, ChevronRight, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+
+// Unauth users see 3 prospects, rest are paywalled
+const UNAUTH_PROSPECT_LIMIT = 3;
 
 interface DiscoveryV2TabProps {
   criteria: DiscoverySessionCriteria;
@@ -24,6 +27,7 @@ export function DiscoveryV2Tab({
   const [expandedProspectId, setExpandedProspectId] = useState<string | null>(null);
   const [showBrief, setShowBrief] = useState(false);
   const [accountPlan, setAccountPlan] = useState<{ plan: AccountPlan; prospectName: string } | null>(null);
+  const hasStartedRef = useRef(false);
 
   const {
     session,
@@ -47,7 +51,7 @@ export function DiscoveryV2Tab({
     sessionId: session?.id || null,
     enabled: !!session && progress < 100,
     intervalMs: 3000,
-    onUpdate: (state) => {
+    onUpdate: () => {
       // State is automatically updated in useDiscoverySession via fetchSession
     },
     onComplete: () => {
@@ -55,13 +59,8 @@ export function DiscoveryV2Tab({
     },
   });
 
-  // Start a new discovery session
+  // Auto-start discovery when component mounts with valid criteria
   const startDiscovery = useCallback(async () => {
-    if (!user) {
-      toast.error('Please sign in to use deep research');
-      return;
-    }
-
     // Clear previous state
     clearSession();
 
@@ -75,11 +74,28 @@ export function DiscoveryV2Tab({
       researchAdvantages(sessionId, criteria),
     ]);
 
-    toast.success('Deep research started!');
-  }, [user, criteria, clearSession, createSession, discoverProspects, researchAdvantages]);
+    toast.success('Research started!');
+  }, [criteria, clearSession, createSession, discoverProspects, researchAdvantages]);
 
-  // Handle generating account plan for a prospect
+  // Auto-start on mount if criteria is valid and hasn't started yet
+  useEffect(() => {
+    const hasValidCriteria = 
+      criteria.productDescription && 
+      criteria.territory?.states?.length > 0 &&
+      criteria.targetCategories?.length > 0;
+    
+    if (hasValidCriteria && !hasStartedRef.current && !session) {
+      hasStartedRef.current = true;
+      startDiscovery();
+    }
+  }, [criteria, session, startDiscovery]);
+
+  // Handle generating account plan for a prospect (auth only)
   const handleGeneratePlan = useCallback(async (prospectId: string, prospectName: string) => {
+    if (!user) {
+      toast.error('Please sign up to generate account plans');
+      return;
+    }
     if (!session?.id) return;
 
     toast.loading('Generating account plan...', { id: 'plan' });
@@ -92,7 +108,7 @@ export function DiscoveryV2Tab({
     } else {
       toast.error('Failed to generate plan', { id: 'plan' });
     }
-  }, [session?.id, generateAccountPlan]);
+  }, [user, session?.id, generateAccountPlan]);
 
   // Sync expanded prospect with selected
   useEffect(() => {
@@ -102,51 +118,48 @@ export function DiscoveryV2Tab({
   }, [selectedProspectId]);
 
   // Handle prospect click
-  const handleProspectToggle = (prospect: DiscoveryProspect) => {
+  const handleProspectToggle = (prospect: DiscoveryProspect, isLocked: boolean) => {
+    if (isLocked) {
+      toast.error('Sign up to unlock all prospects');
+      return;
+    }
     const newExpanded = expandedProspectId === prospect.prospectId ? null : prospect.prospectId;
     setExpandedProspectId(newExpanded);
     onProspectSelect?.(newExpanded ? prospect : null);
   };
 
-  // Not authenticated
-  if (!user) {
+  // Determine which prospects to show and which are locked
+  const visibleProspects = user ? prospects : prospects.slice(0, UNAUTH_PROSPECT_LIMIT);
+  const lockedProspects = user ? [] : prospects.slice(UNAUTH_PROSPECT_LIMIT);
+  const hiddenProspectCount = lockedProspects.length;
+
+  // No valid criteria - show prompt
+  const hasValidCriteria = 
+    criteria.productDescription && 
+    criteria.territory?.states?.length > 0 &&
+    criteria.targetCategories?.length > 0;
+
+  if (!hasValidCriteria) {
     return (
       <div className={cn("flex flex-col items-center justify-center h-full p-8", className)}>
         <Sparkles className="w-12 h-12 text-gray-300 mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Deep Research</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Complete Setup First</h3>
         <p className="text-gray-500 text-center mb-4">
-          Sign in to access AI-powered competitive intelligence and account planning.
+          Fill in your product, territory, and target categories to start AI-powered discovery.
         </p>
       </div>
     );
   }
 
-  // No session yet - show start button
-  if (!session) {
+  // Loading initial session
+  if (!session && (isCreating || isLoading)) {
     return (
       <div className={cn("flex flex-col items-center justify-center h-full p-8", className)}>
-        <Sparkles className="w-12 h-12 text-primary/30 mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Deep Research Mode</h3>
-        <p className="text-gray-500 text-center mb-6 max-w-md">
-          Get AI-powered competitive intelligence, stakeholder analysis, and personalized account plans for your top prospects.
+        <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Starting Research...</h3>
+        <p className="text-gray-500 text-center">
+          Our AI is finding the best prospects for you.
         </p>
-        <button
-          onClick={startDiscovery}
-          disabled={isCreating}
-          className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-        >
-          {isCreating ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Starting...
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-5 h-5" />
-              Start Deep Research
-            </>
-          )}
-        </button>
       </div>
     );
   }
@@ -159,18 +172,21 @@ export function DiscoveryV2Tab({
           <div>
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-primary" />
-              Deep Research
+              Discovery
             </h2>
             <p className="text-sm text-gray-500">
-              {prospects.length} prospects • {progress}% complete
+              {prospects.length} prospects found • {progress}% complete
             </p>
           </div>
           <button
-            onClick={startDiscovery}
-            disabled={isPolling}
+            onClick={() => {
+              hasStartedRef.current = false;
+              startDiscovery();
+            }}
+            disabled={isPolling || isCreating}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <RefreshCw className={cn("w-4 h-4", isPolling && "animate-spin")} />
+            <RefreshCw className={cn("w-4 h-4", (isPolling || isCreating) && "animate-spin")} />
             Refresh
           </button>
         </div>
@@ -212,18 +228,55 @@ export function DiscoveryV2Tab({
           <AdvantagesBrief brief={advantageBrief} />
         )}
 
-        {/* Prospects List */}
+        {/* Visible Prospects List */}
         <div className="space-y-3">
-          {prospects.map((prospect) => (
+          {visibleProspects.map((prospect) => (
             <ProspectDossierCard
               key={prospect.prospectId}
               prospect={prospect}
               isExpanded={expandedProspectId === prospect.prospectId}
-              onToggle={() => handleProspectToggle(prospect)}
+              onToggle={() => handleProspectToggle(prospect, false)}
               onGeneratePlan={() => handleGeneratePlan(prospect.prospectId, prospect.name)}
+              showGeneratePlan={!!user}
             />
           ))}
+
+          {/* Locked prospects preview (blurred) */}
+          {lockedProspects.slice(0, 2).map((prospect) => (
+            <div 
+              key={prospect.prospectId}
+              onClick={() => handleProspectToggle(prospect, true)}
+              className="relative cursor-pointer"
+            >
+              <div className="blur-sm pointer-events-none">
+                <ProspectDossierCard
+                  prospect={prospect}
+                  isExpanded={false}
+                  onToggle={() => {}}
+                  onGeneratePlan={() => {}}
+                />
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900/10 rounded-xl">
+                <Lock className="w-5 h-5 text-gray-600" />
+              </div>
+            </div>
+          ))}
         </div>
+
+        {/* Unauth user paywall card */}
+        {!user && hiddenProspectCount > 0 && (
+          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-6 text-center">
+            <h4 className="font-bold text-white text-lg mb-1">Unlock {hiddenProspectCount} more prospects</h4>
+            <p className="text-gray-400 text-sm mb-4">Plus: Save leads, generate account plans, AI insights & more</p>
+            <a
+              href="/auth"
+              className="inline-block w-full px-4 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary/90 transition-colors"
+            >
+              Sign Up Free →
+            </a>
+            <p className="text-xs text-gray-500 mt-3">No credit card required</p>
+          </div>
+        )}
 
         {/* Loading state */}
         {isLoading && prospects.length === 0 && (
