@@ -304,6 +304,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           id: string
+          is_custom_territory: boolean | null
           region: string | null
           states: Json | null
           updated_at: string | null
@@ -314,6 +315,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          is_custom_territory?: boolean | null
           region?: string | null
           states?: Json | null
           updated_at?: string | null
@@ -324,6 +326,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          is_custom_territory?: boolean | null
           region?: string | null
           states?: Json | null
           updated_at?: string | null
