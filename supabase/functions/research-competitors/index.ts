@@ -65,16 +65,22 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    const prompt = `Given a company that sells: "${productDescription}"
-${companyDomain ? `Their website is: ${companyDomain}` : ''}
+    console.log('Input:', { productDescription, companyDomain });
+    
+    const prompt = `A sales rep works for a company that sells: "${productDescription}"
+${companyDomain ? `Their company website is: ${companyDomain}` : ''}
 
-List 5-10 competitors RANKED from largest market presence to smallest. Consider:
-- Revenue, market share, brand recognition
-- Direct competitors selling similar products
-- Well-known players in government/enterprise sales
+The sales rep wants to find prospects currently using COMPETING products so they can pitch switching to their solution.
 
-Return ONLY a JSON array of company names in order (biggest first), no explanation.
-Example: ["Largest Corp", "Big Inc", "Medium Co", "Smaller LLC"]`;
+List 5-10 COMPETITOR COMPANIES (not the user's company) whose customers the sales rep should target. These are vendors the sales rep wants to DISPLACE.
+
+IMPORTANT: 
+- Do NOT include "${companyDomain?.replace(/\.(com|io|net|org)$/i, '') || 'the user company'}" - that's the user's own company
+- Return direct competitors that sell similar products to similar buyers
+- Rank from largest market presence to smallest
+
+Return ONLY a JSON array of competitor company names (biggest first), no explanation.
+Example: ["Competitor A", "Competitor B", "Competitor C"]`;
 
     console.log('Calling Lovable AI for competitor research...');
     
