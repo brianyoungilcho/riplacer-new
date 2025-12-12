@@ -68,13 +68,13 @@ serve(async (req) => {
     const prompt = `Given a company that sells: "${productDescription}"
 ${companyDomain ? `Their website is: ${companyDomain}` : ''}
 
-List the top 5-10 competitors in this space. Focus on:
+List 5-10 competitors RANKED from largest market presence to smallest. Consider:
+- Revenue, market share, brand recognition
 - Direct competitors selling similar products
 - Well-known players in government/enterprise sales
-- Companies that would be found in RFPs and procurement documents
 
-Return ONLY a JSON array of company names, no explanation.
-Example: ["Company A", "Company B", "Company C"]`;
+Return ONLY a JSON array of company names in order (biggest first), no explanation.
+Example: ["Largest Corp", "Big Inc", "Medium Co", "Smaller LLC"]`;
 
     console.log('Calling Lovable AI for competitor research...');
     
