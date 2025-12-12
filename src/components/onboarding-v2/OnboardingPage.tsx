@@ -286,7 +286,6 @@ export function OnboardingPage() {
   // Workspace nav items
   const workspaceNavItems: { id: WorkspaceTab; label: string; icon: typeof Search; count?: number }[] = [
     { id: 'discovery', label: 'Discovery', icon: Search },
-    { id: 'discovery-v2', label: 'Deep Research', icon: Sparkles },
     { id: 'saved', label: 'Saved Leads', icon: Star, count: 0 },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -540,14 +539,6 @@ export function OnboardingPage() {
           >
             <ResizablePanel defaultSize={50} minSize={30} className="flex flex-col relative z-10 min-w-0">
               {activeTab === 'discovery' && (
-                <DiscoveryTab 
-                  data={data} 
-                  onProspectsChange={setMapProspects}
-                  onProspectSelect={(p) => setSelectedProspectId(p?.id || null)}
-                  selectedProspectId={selectedProspectId}
-                />
-              )}
-              {activeTab === 'discovery-v2' && (
                 <DiscoveryV2Tab 
                   criteria={{
                     productDescription: data.productDescription,
