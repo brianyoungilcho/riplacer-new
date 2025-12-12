@@ -668,6 +668,361 @@ interface Prospect {
 
 ---
 
+## Prospect Discovery v2 (Deep Research + Account Strategy) — Addendum (NEW)
+
+This section describes the **next-generation prospect discovery** flow:
+
+1) **Strategic Advantage Brief** (deep research vs specified competitors; grounded in citations)  
+2) **Prospecting** (limit to 5–10 prospects for speed/quality)  
+3) **Per-account Dossier** (contracts, stakeholders, macro signals, citations)  
+4) **Rep Augmentation** (private notes, internal context)  
+5) **Account Plan** (synthesized angles + next steps + messaging)
+
+### Guiding principles
+- **Store “facts + evidence”, not internal model reasoning**. Persist structured outputs + citations + confidence.
+- **Separate public evidence from private rep notes** (different tables + RLS).
+- **Async-first for deep research**: the UI should see progress states and partial completion (job queue + polling).
+- **Keep current endpoints working**; add v2 endpoints to avoid breaking the existing UI.
+
+---
+
+## New Edge Functions (v2)
+
+### 1) `create-discovery-session` (NEW)
+**Purpose**: Create a durable “research run” tied to a criteria bundle (product, territory, buyers, competitors).
+
+**Request**
+```ts
+POST /functions/v1/create-discovery-session
+{
+  productDescription: string;
+  territory: { states: string[]; cities?: string[]; customDescription?: string; isCustomTerritory?: boolean };
+  targetCategories: string[];        // buyers / segments (current UI uses categories)
+  competitors: string[];
+  companyDomain?: string;            // optional, if available from profile
+}
+```
+
+**Response**
+```ts
+{
+  sessionId: string;
+  status: "created";
+}
+```
+
+---
+
+### 2) `research-competitive-advantages` (NEW)
+**Purpose**: Deep research to produce a **Strategic Advantage Brief** (why we win vs the selected competitors).
+
+**Notes**
+- Use a “deep” model (Gemini Pro-tier) and **require citations** (URLs + title + relevant excerpt).
+- Optionally fetch and include: user company website pages (from profile/companyDomain), competitor sites, and key public pages.
+
+**Request**
+```ts
+POST /functions/v1/research-competitive-advantages
+{
+  sessionId: string;
+  productDescription: string;
+  targetCategories: string[];
+  competitors: string[];
+  companyDomain?: string;
+}
+```
+
+**Response**
+```ts
+{
+  brief: {
+    positioningSummary: string;
+    advantages: Array<{
+      title: string;                    // e.g. "Lower total cost"
+      whyItMattersToBuyer: string;
+      competitorComparisons: Array<{
+        competitor: string;
+        claim: string;                  // factual/defensible claim (no hidden reasoning)
+        confidence: number;             // 0-1
+        citations: Array<{ url: string; title?: string; excerpt?: string }>;
+      }>;
+      talkTrackBullets: string[];       // crisp lines a rep can say
+      objectionsAndResponses: Array<{ objection: string; response: string }>;
+    }>;
+    lastUpdated: string;
+  };
+}
+```
+
+---
+
+### 3) `discover-prospects-v2` (NEW)
+**Purpose**: Return **5–10 prospects max** (seed list) and enqueue deep per-account research jobs.
+
+**Request**
+```ts
+POST /functions/v1/discover-prospects-v2
+{
+  sessionId: string;
+  productDescription: string;
+  territory: { states: string[]; cities?: string[]; customDescription?: string; isCustomTerritory?: boolean };
+  targetCategories: string[];
+  competitors: string[];
+  limit?: number;              // default 8
+}
+```
+
+**Response**
+```ts
+{
+  prospects: Array<{
+    prospectId: string;
+    name: string;
+    state?: string;
+    lat?: number;
+    lng?: number;
+    initialScore?: number;      // optional coarse score before dossier
+    researchStatus: "queued" | "researching" | "ready" | "failed";
+  }>;
+  jobs: Array<{ jobId: string; prospectId: string; status: string }>;
+}
+```
+
+**Implementation notes**
+- Prefer **real prospects** (no mock filler in v2). If insufficient results, return fewer and explain via `warnings`.
+- Hard requirement: **only within `territory.states`**; validate after extraction.
+
+---
+
+### 4) `get-discovery-session` (NEW)
+**Purpose**: One polling endpoint to fetch current session state: brief + prospects + job statuses.
+
+**Request**
+```ts
+POST /functions/v1/get-discovery-session
+{ sessionId: string; }
+```
+
+**Response**
+```ts
+{
+  session: { id: string; status: string; createdAt: string; };
+  advantageBrief?: { /* same shape as above */ };
+  prospects: Array<{
+    prospectId: string;
+    name: string;
+    state?: string;
+    lat?: number;
+    lng?: number;
+    dossierStatus: "queued" | "researching" | "ready" | "failed";
+    dossierLastUpdated?: string;
+  }>;
+  jobs: Array<{ id: string; type: string; status: string; progress?: number; error?: string }>;
+}
+```
+
+---
+
+### 5) `research-prospect-dossier` (NEW)
+**Purpose**: Deep research for a single account (contract, stakeholders, macro context) with citations.
+
+**Request**
+```ts
+POST /functions/v1/research-prospect-dossier
+{
+  sessionId: string;
+  prospect: {
+    name: string;
+    state?: string;
+    lat?: number;
+    lng?: number;
+    website?: string;
+    address?: string;
+  };
+  forceRefresh?: boolean;        // default false
+}
+```
+
+**Response**
+```ts
+{
+  dossier: {
+    summary: string;
+    incumbent: { vendor?: string; confidence: number; citations: Array<{url: string; excerpt?: string}> };
+    contract: {
+      estimatedAnnualValue?: string;
+      estimatedExpiration?: string;     // ISO or "Unknown"
+      contractNotes?: string;
+      citations: Array<{url: string; title?: string; excerpt?: string}>;
+    };
+    stakeholders: Array<{
+      name?: string;
+      title?: string;
+      stance: "supporter" | "opponent" | "neutral" | "unknown";
+      confidence: number;
+      citations: Array<{url: string; excerpt?: string}>;
+    }>;
+    macroSignals: Array<{
+      type: "budget" | "leadership" | "election" | "public_sentiment" | "audit" | "rfp" | "other";
+      description: string;
+      confidence: number;
+      citations: Array<{url: string; excerpt?: string}>;
+    }>;
+    recommendedAngles: Array<{
+      title: string;
+      message: string;
+      mappedAdvantageTitles: string[];  // links dossier → advantage brief
+      confidence: number;
+      citations: Array<{url: string; excerpt?: string}>;
+    }>;
+    sources: Array<{ url: string; title?: string; excerpt?: string; type?: string }>;
+    lastUpdated: string;
+  };
+}
+```
+
+---
+
+### 6) `generate-account-plan` (NEW)
+**Purpose**: Synthesize **Advantage Brief + Dossier + Rep Notes** into a plan and suggested next steps.
+
+**Request**
+```ts
+POST /functions/v1/generate-account-plan
+{
+  sessionId: string;
+  prospectId: string;
+  repNotes?: string;   // private; if omitted, server fetches latest saved notes
+}
+```
+
+**Response**
+```ts
+{
+  plan: {
+    executiveSummary: string;
+    whoToTarget: string[];
+    whoToAvoid: string[];
+    nextSteps: string[];
+    talkTrack: string[];
+    emailDraft?: string;
+    risks: string[];
+    confidence: number;
+    lastUpdated: string;
+  };
+}
+```
+
+---
+
+## New Database Tables (v2)
+
+### `discovery_sessions`
+Stores a durable run + criteria hash.
+```sql
+CREATE TABLE discovery_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  criteria JSONB NOT NULL,
+  criteria_hash TEXT NOT NULL,
+  status TEXT DEFAULT 'created',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_discovery_sessions_user ON discovery_sessions(user_id, created_at DESC);
+CREATE INDEX idx_discovery_sessions_hash ON discovery_sessions(criteria_hash);
+```
+
+### `advantage_briefs`
+```sql
+CREATE TABLE advantage_briefs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID REFERENCES discovery_sessions(id) ON DELETE CASCADE,
+  brief JSONB NOT NULL,
+  sources JSONB DEFAULT '[]',
+  expires_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '7 days',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(session_id)
+);
+```
+
+### `prospect_dossiers`
+```sql
+CREATE TABLE prospect_dossiers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID REFERENCES discovery_sessions(id) ON DELETE CASCADE,
+  prospect_key TEXT NOT NULL, -- stable key (e.g., place_id if known; else hash of name+state)
+  dossier JSONB NOT NULL,
+  sources JSONB DEFAULT '[]',
+  status TEXT DEFAULT 'queued',
+  last_updated TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(session_id, prospect_key)
+);
+CREATE INDEX idx_dossiers_session ON prospect_dossiers(session_id);
+```
+
+### `research_jobs`
+```sql
+CREATE TABLE research_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  session_id UUID REFERENCES discovery_sessions(id) ON DELETE CASCADE,
+  job_type TEXT NOT NULL,       -- advantage_brief | discover_prospects | dossier | account_plan
+  prospect_key TEXT,
+  status TEXT DEFAULT 'queued', -- queued | running | complete | failed
+  progress INT DEFAULT 0,
+  error TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ
+);
+CREATE INDEX idx_jobs_session ON research_jobs(session_id, created_at DESC);
+```
+
+### `rep_notes` (private augmentation)
+```sql
+CREATE TABLE rep_notes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  session_id UUID REFERENCES discovery_sessions(id) ON DELETE CASCADE,
+  prospect_key TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, session_id, prospect_key)
+);
+```
+
+### RLS (high level)
+- `discovery_sessions`, `advantage_briefs`, `prospect_dossiers`, `research_jobs`, `rep_notes`: **user-owned only** (`auth.uid() = user_id`).
+- If you later introduce “shared org workspaces”, replace user_id checks with workspace membership.
+
+---
+
+## Job Execution Options (engineer can choose)
+
+### Option 1: Synchronous (fastest build, least scalable)
+- v2 endpoints run research inline and return when done.
+- Works only if strict time limits are met (often risky for deep research).
+
+### Option 2: Hybrid (recommended)
+- `discover-prospects-v2` returns seed list quickly, enqueues per-prospect dossiers.
+- Frontend polls `get-discovery-session` for progress and hydrates dossiers as ready.
+
+### Option 3: Fully async (best long-term)
+- All deep tasks enqueue jobs; scheduled worker (cron) processes queue in small batches.
+- Frontend becomes fully progress-driven.
+
+---
+
+## Model & Retrieval Notes
+- Use a “deep” model for: advantage brief + dossier + plan synthesis.
+- Use a “fast” model for: formatting, dedupe, light classification, short summaries.
+- Require citations for any factual claims; store citations in `sources` JSONB and attach excerpts where possible.
+
+---
+
 ## Questions for Backend Engineer
 
 Please clarify if you need more details on:
