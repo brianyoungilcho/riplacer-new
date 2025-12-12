@@ -87,7 +87,7 @@ export type Database = {
           id: string
           status: string | null
           updated_at: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -96,7 +96,7 @@ export type Database = {
           id?: string
           status?: string | null
           updated_at?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -105,7 +105,7 @@ export type Database = {
           id?: string
           status?: string | null
           updated_at?: string | null
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -351,7 +351,7 @@ export type Database = {
           session_id: string
           started_at: string | null
           status: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -365,7 +365,7 @@ export type Database = {
           session_id: string
           started_at?: string | null
           status?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -379,7 +379,7 @@ export type Database = {
           session_id?: string
           started_at?: string | null
           status?: string | null
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {

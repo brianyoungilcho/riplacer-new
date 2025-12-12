@@ -12,44 +12,43 @@ serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Authorization required' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    // Try to get user from auth header (optional for anonymous sessions)
+    let userId: string | null = null;
+    const authHeader = req.headers.get('Authorization');
     
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user } } = await supabase.auth.getUser(token);
+      userId = user?.id || null;
     }
 
     const { sessionId, processNextJob = true } = await req.json();
 
-    console.log('Getting discovery session:', sessionId);
+    console.log('Getting discovery session:', sessionId, 'user:', userId || 'anonymous');
 
     // Get session
     const { data: session, error: sessionError } = await supabase
       .from('discovery_sessions')
-      .select('id, status, criteria, created_at, updated_at')
+      .select('id, user_id, status, criteria, created_at, updated_at')
       .eq('id', sessionId)
-      .eq('user_id', user.id)
       .single();
 
     if (sessionError || !session) {
       return new Response(
         JSON.stringify({ error: 'Session not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verify access: either user owns it or it's anonymous
+    if (session.user_id && session.user_id !== userId) {
+      return new Response(
+        JSON.stringify({ error: 'Access denied' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -97,7 +96,7 @@ serve(async (req) => {
             fetch(dossierUrl, {
               method: 'POST',
               headers: {
-                'Authorization': authHeader,
+                ...(authHeader ? { 'Authorization': authHeader } : {}),
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
@@ -152,6 +151,7 @@ serve(async (req) => {
           createdAt: session.created_at,
           updatedAt: session.updated_at,
           criteria: session.criteria,
+          isAnonymous: !session.user_id,
         },
         advantageBrief: brief?.status === 'ready' ? brief.brief : undefined,
         advantageBriefStatus: brief?.status || 'pending',
