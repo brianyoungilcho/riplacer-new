@@ -13,6 +13,7 @@ const UNAUTH_PROSPECT_LIMIT = 3;
 interface DiscoveryV2TabProps {
   criteria: DiscoverySessionCriteria;
   onProspectSelect?: (prospect: DiscoveryProspect | null) => void;
+  onProspectsChange?: (prospects: DiscoveryProspect[]) => void;
   selectedProspectId?: string | null;
   className?: string;
 }
@@ -20,6 +21,7 @@ interface DiscoveryV2TabProps {
 export function DiscoveryV2Tab({ 
   criteria, 
   onProspectSelect, 
+  onProspectsChange,
   selectedProspectId,
   className 
 }: DiscoveryV2TabProps) {
@@ -116,6 +118,11 @@ export function DiscoveryV2Tab({
       setExpandedProspectId(selectedProspectId);
     }
   }, [selectedProspectId]);
+
+  // Notify parent when prospects change (for map)
+  useEffect(() => {
+    onProspectsChange?.(prospects);
+  }, [prospects, onProspectsChange]);
 
   // Handle prospect click
   const handleProspectToggle = (prospect: DiscoveryProspect, isLocked: boolean) => {
@@ -277,11 +284,25 @@ export function DiscoveryV2Tab({
           </div>
         )}
 
-        {/* Loading state */}
+        {/* Loading skeletons */}
         {isLoading && prospects.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
-            <p className="text-gray-500">Finding prospects...</p>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 animate-pulse">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gray-200" />
+                  <div className="flex-1">
+                    <div className="h-4 bg-gray-200 rounded w-32 mb-2" />
+                    <div className="h-3 bg-gray-100 rounded w-24" />
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-gray-200" />
+                </div>
+                <div className="mt-3 space-y-2">
+                  <div className="h-3 bg-gray-100 rounded w-full" />
+                  <div className="h-3 bg-gray-100 rounded w-3/4" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

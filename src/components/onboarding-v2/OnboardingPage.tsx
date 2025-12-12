@@ -11,6 +11,7 @@ import { StepResults } from './StepResults';
 import { OnboardingMap } from './OnboardingMap';
 import { SavedLeadsTab, SettingsTab, type Prospect } from './workspace';
 import { DiscoveryV2Tab } from '@/components/discovery-v2';
+import { type DiscoveryProspect } from '@/hooks/useDiscoverySession';
 import { Crosshair, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Star, Settings, SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -548,6 +549,17 @@ export function OnboardingPage() {
                     competitors: data.competitors,
                   }}
                   onProspectSelect={(p) => setSelectedProspectId(p?.prospectId || null)}
+                  onProspectsChange={(prospects) => {
+                    // Convert v2 prospects to map-compatible format
+                    const mapped = prospects.map(p => ({
+                      id: p.prospectId,
+                      name: p.name,
+                      score: p.score || 0,
+                      lat: p.lat,
+                      lng: p.lng,
+                    }));
+                    setMapProspects(mapped);
+                  }}
                   selectedProspectId={selectedProspectId}
                 />
               )}
