@@ -62,7 +62,7 @@ export function OnboardingPage() {
   const [mapExpanded, setMapExpanded] = useState(true); // Map panel visibility
   const [searchCriteriaExpanded, setSearchCriteriaExpanded] = useState(false); // Search criteria dropdown
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('discovery'); // Workspace tab
-  const [mapProspects, setMapProspects] = useState<Prospect[]>([]); // Prospects for map markers
+  const [mapProspects, setMapProspects] = useState<Prospect[]>([]); // Prospects for map markers (currently unused with v2)
   const [selectedProspectId, setSelectedProspectId] = useState<string | null>(null); // Selected prospect on map
 
   // Load saved progress from localStorage on mount

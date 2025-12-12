@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useDiscoverySession, type DiscoverySessionCriteria, type DiscoveryProspect } from '@/hooks/useDiscoverySession';
 import { useDiscoveryPolling } from '@/hooks/useDiscoveryPolling';
 import { ResearchProgress, AdvantagesBrief, ProspectDossierCard, AccountPlanView, type AccountPlan } from '@/components/discovery-v2';
-import { Loader2, Sparkles, RefreshCw, ChevronRight, Lock } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronRight, Lock, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -142,7 +142,7 @@ export function DiscoveryV2Tab({
   if (!hasValidCriteria) {
     return (
       <div className={cn("flex flex-col items-center justify-center h-full p-8", className)}>
-        <Sparkles className="w-12 h-12 text-gray-300 mb-4" />
+        <Zap className="w-12 h-12 text-gray-300 mb-4" />
         <h3 className="text-lg font-medium text-gray-900 mb-2">Complete Setup First</h3>
         <p className="text-gray-500 text-center mb-4">
           Fill in your product, territory, and target categories to start AI-powered discovery.
@@ -170,8 +170,7 @@ export function DiscoveryV2Tab({
       <div className="px-4 py-3 bg-white border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold text-gray-900">
               Discovery
             </h2>
             <p className="text-sm text-gray-500">
@@ -207,7 +206,7 @@ export function DiscoveryV2Tab({
           >
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-primary" />
+                <Zap className="w-4 h-4 text-primary" />
               </div>
               <div className="text-left">
                 <h4 className="font-medium text-gray-900">Strategic Advantage Brief</h4>

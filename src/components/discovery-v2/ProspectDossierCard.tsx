@@ -43,9 +43,9 @@ export function ProspectDossierCard({
   const angles = dossier?.anglesForList || prospect.angles || [];
 
   const getScoreColor = (s: number) => {
-    if (s >= 80) return 'bg-green-500';
-    if (s >= 60) return 'bg-amber-500';
-    return 'bg-gray-400';
+    if (s >= 80) return 'bg-red-500';
+    if (s >= 60) return 'bg-red-400';
+    return 'bg-red-300';
   };
 
   return (
