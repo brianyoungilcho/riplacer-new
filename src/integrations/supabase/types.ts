@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      competitor_research_cache: {
+        Row: {
+          competitors: Json
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          input_hash: string
+        }
+        Insert: {
+          competitors: Json
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          input_hash: string
+        }
+        Update: {
+          competitors?: Json
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          input_hash?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           company_name: string | null
@@ -53,6 +77,36 @@ export type Database = {
         }
         Relationships: []
       }
+      prospect_discovery_cache: {
+        Row: {
+          created_at: string | null
+          criteria_hash: string
+          expires_at: string | null
+          id: string
+          page_number: number
+          prospects: Json
+          total_estimate: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          criteria_hash: string
+          expires_at?: string | null
+          id?: string
+          page_number: number
+          prospects: Json
+          total_estimate?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          criteria_hash?: string
+          expires_at?: string | null
+          id?: string
+          page_number?: number
+          prospects?: Json
+          total_estimate?: number | null
+        }
+        Relationships: []
+      }
       prospects: {
         Row: {
           address: string | null
@@ -72,6 +126,7 @@ export type Database = {
           riplace_angle: string | null
           riplace_score: number | null
           sources: Json | null
+          state: string | null
           updated_at: string | null
           website_url: string | null
         }
@@ -93,6 +148,7 @@ export type Database = {
           riplace_angle?: string | null
           riplace_score?: number | null
           sources?: Json | null
+          state?: string | null
           updated_at?: string | null
           website_url?: string | null
         }
@@ -114,6 +170,7 @@ export type Database = {
           riplace_angle?: string | null
           riplace_score?: number | null
           sources?: Json | null
+          state?: string | null
           updated_at?: string | null
           website_url?: string | null
         }
@@ -171,6 +228,7 @@ export type Database = {
         Row: {
           ai_hook: string | null
           created_at: string | null
+          deleted_at: string | null
           id: string
           notes: string | null
           prospect_id: string
@@ -181,6 +239,7 @@ export type Database = {
         Insert: {
           ai_hook?: string | null
           created_at?: string | null
+          deleted_at?: string | null
           id?: string
           notes?: string | null
           prospect_id: string
@@ -191,6 +250,7 @@ export type Database = {
         Update: {
           ai_hook?: string | null
           created_at?: string | null
+          deleted_at?: string | null
           id?: string
           notes?: string | null
           prospect_id?: string
@@ -207,6 +267,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_prospect_lists: {
+        Row: {
+          created_at: string | null
+          deleted_at: string | null
+          id: string
+          prospect_data: Json
+          source: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          deleted_at?: string | null
+          id?: string
+          prospect_data: Json
+          source?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          deleted_at?: string | null
+          id?: string
+          prospect_data?: Json
+          source?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       user_territories: {
         Row: {

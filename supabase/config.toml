@@ -23,3 +23,18 @@ verify_jwt = true
 
 [functions.re-enrich-favorites]
 verify_jwt = false
+
+[functions.research-competitors]
+verify_jwt = false
+
+[functions.discover-prospects]
+verify_jwt = false
+
+[functions.parse-territory]
+verify_jwt = false
+
+[functions.enrich-single-prospect]
+verify_jwt = false
+
+[functions.delete-prospect]
+verify_jwt = true
