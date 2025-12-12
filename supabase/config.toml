@@ -38,3 +38,21 @@ verify_jwt = false
 
 [functions.delete-prospect]
 verify_jwt = true
+
+[functions.create-discovery-session]
+verify_jwt = true
+
+[functions.research-competitive-advantages]
+verify_jwt = true
+
+[functions.discover-prospects-v2]
+verify_jwt = true
+
+[functions.get-discovery-session]
+verify_jwt = true
+
+[functions.research-prospect-dossier]
+verify_jwt = true
+
+[functions.generate-account-plan]
+verify_jwt = true

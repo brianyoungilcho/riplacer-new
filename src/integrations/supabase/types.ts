@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      advantage_briefs: {
+        Row: {
+          brief: Json
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          session_id: string
+          sources: Json | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          brief: Json
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          session_id: string
+          sources?: Json | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          brief?: Json
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          session_id?: string
+          sources?: Json | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advantage_briefs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "discovery_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       competitor_research_cache: {
         Row: {
           competitors: Json
@@ -35,6 +76,36 @@ export type Database = {
           expires_at?: string | null
           id?: string
           input_hash?: string
+        }
+        Relationships: []
+      }
+      discovery_sessions: {
+        Row: {
+          created_at: string | null
+          criteria: Json
+          criteria_hash: string
+          id: string
+          status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          criteria: Json
+          criteria_hash: string
+          id?: string
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          criteria?: Json
+          criteria_hash?: string
+          id?: string
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -107,6 +178,59 @@ export type Database = {
         }
         Relationships: []
       }
+      prospect_dossiers: {
+        Row: {
+          created_at: string | null
+          dossier: Json | null
+          id: string
+          last_updated: string | null
+          prospect_key: string
+          prospect_lat: number | null
+          prospect_lng: number | null
+          prospect_name: string
+          prospect_state: string | null
+          session_id: string
+          sources: Json | null
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          dossier?: Json | null
+          id?: string
+          last_updated?: string | null
+          prospect_key: string
+          prospect_lat?: number | null
+          prospect_lng?: number | null
+          prospect_name: string
+          prospect_state?: string | null
+          session_id: string
+          sources?: Json | null
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          dossier?: Json | null
+          id?: string
+          last_updated?: string | null
+          prospect_key?: string
+          prospect_lat?: number | null
+          prospect_lng?: number | null
+          prospect_name?: string
+          prospect_state?: string | null
+          session_id?: string
+          sources?: Json | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_dossiers_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prospects: {
         Row: {
           address: string | null
@@ -175,6 +299,97 @@ export type Database = {
           website_url?: string | null
         }
         Relationships: []
+      }
+      rep_notes: {
+        Row: {
+          created_at: string | null
+          id: string
+          notes: string
+          prospect_key: string
+          session_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          notes: string
+          prospect_key: string
+          session_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          notes?: string
+          prospect_key?: string
+          session_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rep_notes_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      research_jobs: {
+        Row: {
+          created_at: string | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          job_type: string
+          progress: number | null
+          prospect_key: string | null
+          result: Json | null
+          session_id: string
+          started_at: string | null
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          job_type: string
+          progress?: number | null
+          prospect_key?: string | null
+          result?: Json | null
+          session_id: string
+          started_at?: string | null
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          job_type?: string
+          progress?: number | null
+          prospect_key?: string | null
+          result?: Json | null
+          session_id?: string
+          started_at?: string | null
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_jobs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_categories: {
         Row: {
