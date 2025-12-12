@@ -30,7 +30,7 @@ export default function Auth() {
   const getReturnPath = () => {
     // Check URL state first (passed via navigate)
     const fromState = (location.state as { from?: string })?.from;
-    if (fromState === '/start' || fromState === '/onboarding') {
+    if (fromState === '/start') {
       return fromState;
     }
     
