@@ -22,6 +22,7 @@ export interface Prospect {
   highlight: string;
   highlightType: 'opportunity' | 'timing' | 'weakness';
   riplaceAngle: string;
+  angles?: string[]; // Minimal “how to win” tags (from API if available)
   sources: { label: string; url: string }[];
   lastUpdated: string;
   lat?: number;
@@ -47,6 +48,26 @@ const parseContractValue = (value: string): number => {
     return parseInt(match[1].replace(/,/g, ''), 10);
   }
   return 0;
+};
+
+const inferAngles = (prospect: Pick<Prospect, 'highlight' | 'highlightType'>): string[] => {
+  const h = (prospect.highlight || '').toLowerCase();
+  const angles: string[] = [];
+
+  if (h.includes('rfp')) angles.push('Angle: RFP response');
+  if (h.includes('contract') || h.includes('renew') || h.includes('expir') || prospect.highlightType === 'timing') {
+    angles.push('Angle: Renewal window');
+  }
+  if (h.includes('fund') || h.includes('grant') || h.includes('budget') || prospect.highlightType === 'opportunity') {
+    angles.push('Angle: Budget / funding');
+  }
+  if (h.includes('leader') || h.includes('chief') || h.includes('cio')) angles.push('Angle: Leadership transition');
+  if (h.includes('vendor') || h.includes('issue') || h.includes('complaint') || prospect.highlightType === 'weakness') {
+    angles.push('Angle: Replacement play');
+  }
+
+  // De-dupe while preserving order
+  return Array.from(new Set(angles));
 };
 const PAGE_SIZE = 10;
 
@@ -222,6 +243,7 @@ export function DiscoveryTab({ data, onProspectSelect, onProspectsChange, select
             highlight: p.highlight || 'Opportunity',
             highlightType: (p.highlightType as 'opportunity' | 'timing' | 'weakness') || 'opportunity',
             riplaceAngle: p.riplaceAngle || '',
+            angles: Array.isArray(p.angles) ? p.angles : undefined,
             sources: p.sources || [],
             lastUpdated: p.lastUpdated || new Date().toISOString(),
             lat: p.lat,
@@ -316,6 +338,7 @@ export function DiscoveryTab({ data, onProspectSelect, onProspectsChange, select
           highlight: p.highlight || 'Opportunity',
           highlightType: (p.highlightType as 'opportunity' | 'timing' | 'weakness') || 'opportunity',
           riplaceAngle: p.riplaceAngle || '',
+          angles: Array.isArray(p.angles) ? p.angles : undefined,
           sources: p.sources || [],
           lastUpdated: p.lastUpdated || new Date().toISOString(),
           lat: p.lat,
@@ -726,7 +749,9 @@ export function DiscoveryTab({ data, onProspectSelect, onProspectsChange, select
           </div>
         ) : (
           <>
-            {displayProspects.map((prospect, index) => (
+            {displayProspects.map((prospect, index) => {
+              const angles = (prospect.angles?.length ? prospect.angles : inferAngles(prospect)).slice(0, 2);
+              return (
               <div
                 key={prospect.id}
                 ref={(el) => {
@@ -768,6 +793,18 @@ export function DiscoveryTab({ data, onProspectSelect, onProspectsChange, select
                       <p className="text-sm text-gray-500">
                         {prospect.contractValue} • {prospect.riplaceAngle.slice(0, 80)}...
                       </p>
+                      {angles.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {angles.map((angle) => (
+                            <span
+                              key={angle}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700"
+                            >
+                              {angle}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions */}
@@ -826,6 +863,23 @@ export function DiscoveryTab({ data, onProspectSelect, onProspectsChange, select
                         </p>
                       </div>
 
+                      {/* Angles */}
+                      {angles.length > 0 && (
+                        <div className="mb-4">
+                          <h4 className="font-medium text-gray-900 mb-2">Angles</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {angles.map((angle) => (
+                              <span
+                                key={angle}
+                                className="inline-flex items-center px-3 py-1.5 bg-gray-100 rounded-lg text-sm text-gray-700"
+                              >
+                                {angle}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Sources */}
                       <div className="mb-4">
                         <h4 className="font-medium text-gray-900 mb-2">Sources</h4>
@@ -859,7 +913,8 @@ export function DiscoveryTab({ data, onProspectSelect, onProspectsChange, select
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
 
             {/* Unauth user limit card */}
             {!user && hiddenProspectCount > 0 && (
