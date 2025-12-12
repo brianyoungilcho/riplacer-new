@@ -190,12 +190,17 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
               <label className="text-sm font-medium text-gray-700">
                 Suggested competitors
               </label>
-              {isResearchLoading && (
+              {isResearchLoading ? (
                 <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
                   <Loader2 className="w-3 h-3 animate-spin" />
                   Researching...
                 </span>
-              )}
+              ) : hasAISuggestions ? (
+                <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+                  <Check className="w-3 h-3" />
+                  AI-powered
+                </span>
+              ) : null}
             </div>
             
             {isResearchLoading && suggestedCompetitors.length === 0 ? (
