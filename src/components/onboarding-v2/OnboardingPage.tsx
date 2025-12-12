@@ -10,12 +10,13 @@ import { StepCompetitors } from './StepCompetitors';
 import { StepResults } from './StepResults';
 import { OnboardingMap } from './OnboardingMap';
 import { DiscoveryTab, SavedLeadsTab, SettingsTab, type Prospect } from './workspace';
-import { Crosshair, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Star, Settings, SlidersHorizontal } from 'lucide-react';
+import { DiscoveryV2Tab } from '@/components/discovery-v2';
+import { Crosshair, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Star, Settings, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 
-type WorkspaceTab = 'discovery' | 'saved' | 'settings';
+type WorkspaceTab = 'discovery' | 'discovery-v2' | 'saved' | 'settings';
 
 export interface OnboardingData {
   // Step 1
@@ -285,6 +286,7 @@ export function OnboardingPage() {
   // Workspace nav items
   const workspaceNavItems: { id: WorkspaceTab; label: string; icon: typeof Search; count?: number }[] = [
     { id: 'discovery', label: 'Discovery', icon: Search },
+    { id: 'discovery-v2', label: 'Deep Research', icon: Sparkles },
     { id: 'saved', label: 'Saved Leads', icon: Star, count: 0 },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -542,6 +544,19 @@ export function OnboardingPage() {
                   data={data} 
                   onProspectsChange={setMapProspects}
                   onProspectSelect={(p) => setSelectedProspectId(p?.id || null)}
+                  selectedProspectId={selectedProspectId}
+                />
+              )}
+              {activeTab === 'discovery-v2' && (
+                <DiscoveryV2Tab 
+                  criteria={{
+                    productDescription: data.productDescription,
+                    companyDomain: data.companyDomain,
+                    territory: { states: data.states, cities: data.cities },
+                    targetCategories: data.targetCategories,
+                    competitors: data.competitors,
+                  }}
+                  onProspectSelect={(p) => setSelectedProspectId(p?.prospectId || null)}
                   selectedProspectId={selectedProspectId}
                 />
               )}
