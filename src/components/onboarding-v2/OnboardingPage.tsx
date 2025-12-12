@@ -109,23 +109,34 @@ export function OnboardingPage() {
         updateData({ competitorResearchLoading: true });
         
         try {
-          // TODO: Replace with actual API call when backend is ready
-          // const { data: suggestions, error } = await supabase.functions.invoke('research-competitors', {
-          //   body: {
-          //     productDescription: data.productDescription,
-          //     companyDomain: data.companyDomain,
-          //   }
-          // });
-          
-          // For now, simulate a delay to show the pattern is working
-          // The backend engineer will implement the actual API
-          console.log('🔍 [Frontend] Would trigger competitor research for:', {
+          console.log('🔍 [Frontend] Triggering competitor research for:', {
             productDescription: data.productDescription,
             companyDomain: data.companyDomain,
           });
           
-          // Simulate API response (remove when backend is ready)
-          // In production, this would be: updateData({ suggestedCompetitors: suggestions, competitorResearchLoading: false });
+          const { data: response, error } = await supabase.functions.invoke('research-competitors', {
+            body: {
+              productDescription: data.productDescription,
+              companyDomain: data.companyDomain,
+            }
+          });
+          
+          if (error) {
+            console.error('Competitor research API error:', error);
+            updateData({ competitorResearchLoading: false });
+            return;
+          }
+          
+          console.log('✅ [Frontend] Competitor research response:', response);
+          
+          if (response?.competitors && Array.isArray(response.competitors)) {
+            updateData({ 
+              suggestedCompetitors: response.competitors, 
+              competitorResearchLoading: false 
+            });
+          } else {
+            updateData({ competitorResearchLoading: false });
+          }
           
         } catch (error) {
           console.error('Failed to fetch competitor suggestions:', error);
