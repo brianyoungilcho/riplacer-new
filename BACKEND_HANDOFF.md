@@ -646,6 +646,7 @@ if (!user) {
 - `OnboardingData.states` - Selected territory states (prospects must be in these)
 - `mapProspects` - Prospects array passed to map for marker display
 - `selectedProspectId` - Currently selected prospect (synced between map and list)
+- **UI Decision (Option B)**: Discovery shows **1–2 “Angle” chips per prospect** (minimal “how to win” tags). If backend returns `angles`, frontend will render them; otherwise it falls back to a heuristic from `highlight` / `highlightType`.
 
 ### Prospect Interface (Frontend expects this)
 ```typescript
@@ -657,6 +658,7 @@ interface Prospect {
   highlight: string;
   highlightType: 'opportunity' | 'timing' | 'weakness';
   riplaceAngle: string;
+  angles?: string[];  // Optional. Short “how to win” tags. Frontend shows max 2 chips.
   sources: { label: string; url: string }[];
   lastUpdated: string;
   lat?: number;       // Required for map
@@ -683,6 +685,11 @@ This section describes the **next-generation prospect discovery** flow:
 - **Separate public evidence from private rep notes** (different tables + RLS).
 - **Async-first for deep research**: the UI should see progress states and partial completion (job queue + polling).
 - **Keep current endpoints working**; add v2 endpoints to avoid breaking the existing UI.
+- **Keep the UI minimal**: primary UI surface is the prospect list; strategy should appear as **small per-prospect “angles”** + citations, not large always-on panels.
+
+### Frontend UX decisions (locked)
+- **Option B chosen**: show **1–2 “Angle” chips per prospect** in the list, plus an “Angles” section inside the expanded card.
+- A global “brief” can exist, but should be **secondary / on-demand** (not required to ship v2).
 
 ---
 
@@ -782,6 +789,7 @@ POST /functions/v1/discover-prospects-v2
     lat?: number;
     lng?: number;
     initialScore?: number;      // optional coarse score before dossier
+    angles?: string[];          // Optional. 1–2 short tags for list chips (e.g., ["Renewal window", "Replacement play"])
     researchStatus: "queued" | "researching" | "ready" | "failed";
   }>;
   jobs: Array<{ jobId: string; prospectId: string; status: string }>;
@@ -875,6 +883,7 @@ POST /functions/v1/research-prospect-dossier
       confidence: number;
       citations: Array<{url: string; excerpt?: string}>;
     }>;
+    anglesForList?: string[];           // Optional. 1–2 short labels derived from recommendedAngles for UI chips
     sources: Array<{ url: string; title?: string; excerpt?: string; type?: string }>;
     lastUpdated: string;
   };
@@ -1041,7 +1050,7 @@ Please clarify if you need more details on:
 If you have questions about frontend expectations or want to test integration:
 - Frontend code is in `/src/components/onboarding-v2/`
 - Main files: `OnboardingPage.tsx`, `OnboardingMap.tsx`, `workspace/DiscoveryTab.tsx`
-- Run dev server: `npm run dev` (port 8081)
+- Run dev server: `npm run dev` (port 8080)
 
 ---
 
