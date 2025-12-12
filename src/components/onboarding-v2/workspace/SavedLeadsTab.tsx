@@ -12,7 +12,18 @@ import {
   Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Prospect } from './DiscoveryTab';
+// Local Prospect type for saved leads
+interface Prospect {
+  id: string;
+  name: string;
+  score: number;
+  contractValue: string;
+  highlight: string;
+  highlightType: 'opportunity' | 'timing' | 'weakness';
+  riplaceAngle: string;
+  sources: { label: string; url: string }[];
+  lastUpdated: string;
+}
 
 interface SavedLeadsTabProps {
   onProspectSelect?: (prospect: SavedProspect | null) => void;
