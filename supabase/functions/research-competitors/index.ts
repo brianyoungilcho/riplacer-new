@@ -67,16 +67,26 @@ serve(async (req) => {
 
     console.log('Input:', { productDescription, companyDomain });
     
-    const prompt = `A sales rep works for a company that sells: "${productDescription}"
-${companyDomain ? `Their company website is: ${companyDomain}` : ''}
+    // Determine if product description is generic (auto-generated) or specific (user-provided)
+    const isGenericDescription = productDescription.toLowerCase().includes('products and services from');
+    
+    const prompt = `A sales rep is selling the following product/solution:
+"${productDescription}"
+${companyDomain ? `They work for: ${companyDomain}` : ''}
 
-The sales rep wants to find prospects currently using COMPETING products so they can pitch switching to their solution.
+${isGenericDescription 
+  ? `Since the product description is generic, research what ${companyDomain} actually sells and identify their direct competitors.`
+  : `Focus specifically on the product described above. Find competitors who sell SIMILAR products to the same type of buyers.`
+}
 
-List 5-10 COMPETITOR COMPANIES (not the user's company) whose customers the sales rep should target. These are vendors the sales rep wants to DISPLACE.
+The sales rep wants to find prospects currently using COMPETING products so they can pitch switching.
 
-IMPORTANT: 
-- Do NOT include "${companyDomain?.replace(/\.(com|io|net|org)$/i, '') || 'the user company'}" - that's the user's own company
-- Return direct competitors that sell similar products to similar buyers
+List 5-10 COMPETITOR COMPANIES whose products directly compete with what the rep is selling. These are vendors the sales rep wants to DISPLACE.
+
+CRITICAL RULES:
+- Focus on the SPECIFIC product/solution described, not the entire company portfolio
+- Do NOT include "${companyDomain?.replace(/\.(com|io|net|org)$/i, '').replace(/^www\./, '') || 'the rep company'}" - that's the rep's own company
+- Only include companies selling similar/competing products to similar buyers
 - Rank from largest market presence to smallest
 
 Return ONLY a JSON array of competitor company names (biggest first), no explanation.
