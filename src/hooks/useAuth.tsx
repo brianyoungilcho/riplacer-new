@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async () => {
     // Preserve current path to return to after OAuth
     const currentPath = window.location.pathname;
-    const redirectPath = currentPath === '/start' || currentPath === '/onboarding' 
+    const redirectPath = currentPath === '/start' 
       ? currentPath 
       : '/start';
     
