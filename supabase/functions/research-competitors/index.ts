@@ -73,33 +73,15 @@ serve(async (req) => {
     // Clean company name from domain for exclusion
     const companyName = companyDomain?.replace(/\.(com|io|net|org|co|ai|dev)$/i, '').replace(/^www\./, '') || '';
     
-    const prompt = `You are researching CURRENT competitors in the market. Use Google Search to find the most up-to-date information.
+    const prompt = `Find competitors for a company selling: "${productDescription}"
+${companyDomain ? `Company: ${companyDomain}` : ''}
 
-A sales rep is selling:
-"${productDescription}"
-${companyDomain ? `They work for: ${companyDomain}` : ''}
+Search the web and return a JSON array of 5-10 competitor company names. These should be companies selling similar products to similar buyers.
 
-${isGenericDescription 
-  ? `The product description is generic. Search the web to find what ${companyDomain} actually sells, then identify their direct competitors.`
-  : `Search the web for companies that sell SIMILAR products to "${productDescription}" targeting the same buyer personas.`
-}
-
-The sales rep wants to find prospects currently using COMPETING products so they can pitch switching.
-
-RESEARCH INSTRUCTIONS:
-1. Search for current market data, not just your training knowledge
-2. Look for recent product launches, acquisitions, or market changes
-3. Focus on the SPECIFIC product/solution described, not entire company portfolios
-4. Find vendors that the sales rep would want to DISPLACE
-
-CRITICAL RULES:
-- Do NOT include "${companyName}" or variations of it - that's the rep's own company
-- Only include companies selling similar/competing products to similar buyers
-- Prioritize companies with significant market presence
-- Include both established players and notable challengers
-
-Return ONLY a JSON array of 5-10 competitor company names, ordered from largest market presence to smallest.
-Example: ["Competitor A", "Competitor B", "Competitor C"]`;
+IMPORTANT:
+- Do NOT include "${companyName}" (that's the user's own company)
+- Return ONLY a valid JSON array like: ["Company A", "Company B", "Company C"]
+- Order by market presence (largest first)`;
 
     console.log('Calling Gemini 2.5 Flash with Google Search grounding...');
     
@@ -124,13 +106,8 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
             }
           ],
           generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 512,
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: 'array',
-              items: { type: 'string' },
-            },
+            temperature: 0.5,
+            maxOutputTokens: 2048,
           }
         }),
       }
@@ -171,36 +148,65 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
       console.log('Search queries used:', groundingMetadata.webSearchQueries);
     }
     
-    // Parse the JSON array from the response
+    // Parse the competitor names from the response
     let competitors: string[] = [];
     try {
-      // Extract JSON array from response (handle markdown code blocks)
+      // Strategy 1: Try to find a complete JSON array
       const jsonMatch = content.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        competitors = JSON.parse(jsonMatch[0]);
-      } else {
-        // Fallback: heuristically extract competitor names from bullet lists / numbered lists
+        try {
+          competitors = JSON.parse(jsonMatch[0]);
+          console.log('Parsed complete JSON array:', competitors.length, 'competitors');
+        } catch {
+          // JSON was incomplete, fall through to other strategies
+          console.log('JSON array found but incomplete, trying other strategies');
+        }
+      }
+      
+      // Strategy 2: Extract quoted strings that look like company names (handles partial JSON)
+      if (competitors.length === 0) {
+        // Match patterns like: "Company Name" in JSON-like context
+        const quotedNames = content.match(/"([A-Z][A-Za-z0-9&.,'\-\s]{2,60})"/g);
+        if (quotedNames && quotedNames.length > 0) {
+          const extracted: string[] = quotedNames
+            .map((q: string) => q.replace(/^"|"$/g, '').trim())
+            .filter((name: string) => {
+              // Filter out common non-company patterns
+              const lower = name.toLowerCase();
+              return name.length >= 3 && 
+                !lower.includes('competitor') && 
+                !lower.includes('example') &&
+                !lower.includes('json') &&
+                !lower.includes('here are') &&
+                !/^\d+$/.test(name); // not just numbers
+            });
+          competitors = Array.from(new Set(extracted)).slice(0, 10);
+          console.log('Extracted from quoted strings:', competitors.length, 'competitors');
+        }
+      }
+      
+      // Strategy 3: Heuristically extract from bullet lists / numbered lists
+      if (competitors.length === 0) {
         const lines = content.split('\n');
         const extracted: string[] = [];
         for (const rawLine of lines) {
           const line = rawLine.trim();
           if (!line) continue;
-      // Match patterns like "1. Company", "- Company", "• Company", or "- Company: description"
-      const match = line.match(/^[\-*•\d\.\)\s]+([A-Z][A-Za-z0-9&.,()\s]{2,80}?)(?::|-|–|$)/);
+          // Match patterns like "1. Company", "- Company", "• Company", or "- Company: description"
+          const match = line.match(/^[\-*•\d\.\)\s]+([A-Z][A-Za-z0-9&.,()\s]{2,80}?)(?::|-|–|$)/);
           if (match) {
             let name = match[1].trim();
-            // Remove trailing punctuation
             name = name.replace(/[.,;:]+$/, '').trim();
-            // Skip obviously non-name lines
-            if (name.length < 2 || name.includes('competitor') || name.includes('example')) continue;
-            extracted.push(name);
+            if (name.length >= 3 && !name.toLowerCase().includes('competitor') && !name.toLowerCase().includes('example')) {
+              extracted.push(name);
+            }
           }
         }
-        // De-duplicate and limit to 10
         competitors = Array.from(new Set(extracted)).slice(0, 10);
+        console.log('Extracted from bullet lists:', competitors.length, 'competitors');
       }
 
-      // Filter out any variations of the user's company name
+      // Filter out the user's own company name
       if (companyName && competitors.length > 0) {
         const lowerCompanyName = companyName.toLowerCase();
         competitors = competitors.filter((c: string) => 
@@ -208,8 +214,10 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
           !lowerCompanyName.includes(c.toLowerCase())
         );
       }
+      
+      console.log('Final competitors after filtering:', competitors);
     } catch (e) {
-      console.error('Failed to parse competitors JSON or extract names:', content);
+      console.error('Failed to parse competitors:', e, 'Content:', content.slice(0, 500));
       competitors = [];
     }
 
