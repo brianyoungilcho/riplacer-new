@@ -39,6 +39,7 @@ export interface OnboardingData {
   competitors: string[];
   suggestedCompetitors?: string[]; // AI-suggested competitors (from early research)
   competitorResearchLoading?: boolean; // true while fetching suggestions
+  competitorResearchFailed?: boolean; // true if AI call succeeded but returned no competitors
   
   // Filters (derived from selections)
   filters: string[];
@@ -131,13 +132,18 @@ export function OnboardingPage() {
           
           console.log('✅ [Frontend] Competitor research response:', response);
           
-          if (response?.competitors && Array.isArray(response.competitors)) {
+          if (response?.competitors && Array.isArray(response.competitors) && response.competitors.length > 0) {
             updateData({ 
               suggestedCompetitors: response.competitors, 
-              competitorResearchLoading: false 
+              competitorResearchLoading: false,
+              competitorResearchFailed: false,
             });
           } else {
-            updateData({ competitorResearchLoading: false });
+            // Mark as finished (and possibly failed) so UI can communicate clearly
+            updateData({ 
+              competitorResearchLoading: false,
+              competitorResearchFailed: !!response?.error,
+            });
           }
           
         } catch (error) {

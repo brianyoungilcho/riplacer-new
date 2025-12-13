@@ -23,6 +23,7 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
 
   // Check if AI research is still loading
   const isResearchLoading = data.competitorResearchLoading;
+  const researchFailed = data.competitorResearchFailed;
   
   // Get AI-suggested competitors
   const suggestedCompetitors = data.suggestedCompetitors || [];

@@ -124,8 +124,13 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
             }
           ],
           generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1024,
+            temperature: 0.3,
+            maxOutputTokens: 512,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'array',
+              items: { type: 'string' },
+            },
           }
         }),
       }
@@ -141,7 +146,14 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
     console.log('Gemini 2.5 Flash response received');
     
     // Extract content from Gemini response format
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    const parts = data.candidates?.[0]?.content?.parts ?? [];
+    const content = parts
+      .map((p: any) => (typeof p.text === 'string' ? p.text : ''))
+      .join('\n')
+      .trim() || '[]';
+
+    console.log('Gemini raw parts (truncated):', JSON.stringify(parts, null, 2).slice(0, 2000));
+    console.log('Gemini text content snippet:', content.slice(0, 500));
     
     // Extract grounding metadata if available
     const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
@@ -222,7 +234,8 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
         cached: false,
         model: 'gemini-2.5-flash',
         webSearchEnabled: true,
-        searchQueries: groundingMetadata?.webSearchQueries || []
+        searchQueries: groundingMetadata?.webSearchQueries || [],
+        error: competitors.length === 0 ? 'no_competitors_found' : null,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
