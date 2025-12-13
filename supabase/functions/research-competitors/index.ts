@@ -101,12 +101,11 @@ CRITICAL RULES:
 Return ONLY a JSON array of 5-10 competitor company names, ordered from largest market presence to smallest.
 Example: ["Competitor A", "Competitor B", "Competitor C"]`;
 
-    console.log('Calling Gemini 2.0 Flash with Google Search grounding...');
+    console.log('Calling Gemini 2.5 Flash with Google Search grounding...');
     
     // Call Gemini API directly with google_search_retrieval tool
-    // Using gemini-2.0-flash which has stable google_search_retrieval support
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: {
@@ -144,7 +143,7 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
     }
 
     const data = await response.json();
-    console.log('Gemini 2.0 Flash response received');
+    console.log('Gemini 2.5 Flash response received');
     
     // Extract content from Gemini response format
     const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
@@ -205,7 +204,7 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
         sources,
         confidence: competitors.length > 0 ? 0.9 : 0.3,
         cached: false,
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         webSearchEnabled: true,
         searchQueries: groundingMetadata?.webSearchQueries || []
       }),
