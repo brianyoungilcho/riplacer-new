@@ -166,17 +166,38 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
       const jsonMatch = content.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         competitors = JSON.parse(jsonMatch[0]);
-        // Filter out any variations of the user's company name
-        if (companyName) {
-          const lowerCompanyName = companyName.toLowerCase();
-          competitors = competitors.filter((c: string) => 
-            !c.toLowerCase().includes(lowerCompanyName) &&
-            !lowerCompanyName.includes(c.toLowerCase())
-          );
+      } else {
+        // Fallback: heuristically extract competitor names from bullet lists / numbered lists
+        const lines = content.split('\n');
+        const extracted: string[] = [];
+        for (const rawLine of lines) {
+          const line = rawLine.trim();
+          if (!line) continue;
+          // Match patterns like "1. Company", "- Company", "• Company"
+          const match = line.match(/^[\-*•\d\.\)\s]+([A-Z][A-Za-z0-9&.,()\s]{2,80})$/);
+          if (match) {
+            let name = match[1].trim();
+            // Remove trailing punctuation
+            name = name.replace(/[.,;:]+$/, '').trim();
+            // Skip obviously non-name lines
+            if (name.length < 2 || name.includes('competitor') || name.includes('example')) continue;
+            extracted.push(name);
+          }
         }
+        // De-duplicate and limit to 10
+        competitors = Array.from(new Set(extracted)).slice(0, 10);
+      }
+
+      // Filter out any variations of the user's company name
+      if (companyName && competitors.length > 0) {
+        const lowerCompanyName = companyName.toLowerCase();
+        competitors = competitors.filter((c: string) => 
+          !c.toLowerCase().includes(lowerCompanyName) &&
+          !lowerCompanyName.includes(c.toLowerCase())
+        );
       }
     } catch (e) {
-      console.error('Failed to parse competitors JSON:', content);
+      console.error('Failed to parse competitors JSON or extract names:', content);
       competitors = [];
     }
 
