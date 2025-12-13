@@ -173,8 +173,8 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
         for (const rawLine of lines) {
           const line = rawLine.trim();
           if (!line) continue;
-          // Match patterns like "1. Company", "- Company", "• Company"
-          const match = line.match(/^[\-*•\d\.\)\s]+([A-Z][A-Za-z0-9&.,()\s]{2,80})$/);
+      // Match patterns like "1. Company", "- Company", "• Company", or "- Company: description"
+      const match = line.match(/^[\-*•\d\.\)\s]+([A-Z][A-Za-z0-9&.,()\s]{2,80}?)(?::|-|–|$)/);
           if (match) {
             let name = match[1].trim();
             // Remove trailing punctuation
