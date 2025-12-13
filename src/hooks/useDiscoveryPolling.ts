@@ -13,7 +13,7 @@ interface UseDiscoveryPollingOptions {
 export function useDiscoveryPolling({
   sessionId,
   enabled = true,
-  intervalMs = 3000,
+  intervalMs = 6000, // Increased from 3000 to 6000ms (6 seconds) for better performance
   onUpdate,
   onComplete,
 }: UseDiscoveryPollingOptions) {
@@ -21,13 +21,24 @@ export function useDiscoveryPolling({
   const [pollCount, setPollCount] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isCompleteRef = useRef(false);
+  // Use refs for callbacks to prevent unnecessary interval recreation
+  const onUpdateRef = useRef(onUpdate);
+  const onCompleteRef = useRef(onComplete);
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+    onCompleteRef.current = onComplete;
+  }, [onUpdate, onComplete]);
 
   const poll = useCallback(async () => {
     if (!sessionId || isCompleteRef.current) return;
 
     try {
+      // Only process jobs on first poll, subsequent polls just fetch state
+      const isFirstPoll = pollCount === 0;
       const { data, error } = await supabase.functions.invoke('get-discovery-session', {
-        body: { sessionId, processNextJob: true },
+        body: { sessionId, processNextJob: isFirstPoll },
       });
 
       if (error) {
@@ -46,7 +57,7 @@ export function useDiscoveryPolling({
         progress: data.progress || 0,
       };
 
-      onUpdate?.(state);
+      onUpdateRef.current?.(state);
 
       // Check if all research is complete
       const allJobsComplete = state.jobs.every(
@@ -59,7 +70,7 @@ export function useDiscoveryPolling({
       if (state.progress >= 100 || (allJobsComplete && allDossiersReady && state.prospects.length > 0)) {
         isCompleteRef.current = true;
         setIsPolling(false);
-        onComplete?.();
+        onCompleteRef.current?.();
         
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
@@ -69,7 +80,7 @@ export function useDiscoveryPolling({
     } catch (err) {
       console.error('Polling failed:', err);
     }
-  }, [sessionId, onUpdate, onComplete]);
+  }, [sessionId, pollCount]);
 
   // Start polling when enabled and sessionId is set
   useEffect(() => {

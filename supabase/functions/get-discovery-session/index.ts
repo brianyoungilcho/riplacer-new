@@ -116,18 +116,24 @@ serve(async (req) => {
     }
 
     // Format response
-    const prospects = (dossiers || []).map(d => ({
-      prospectId: d.prospect_key,
-      name: d.prospect_name,
-      state: d.prospect_state,
-      lat: d.prospect_lat,
-      lng: d.prospect_lng,
-      dossierStatus: d.status,
-      dossierLastUpdated: d.last_updated,
-      dossier: d.status === 'ready' ? d.dossier : undefined,
-      angles: d.dossier?.anglesForList,
-      score: d.dossier?.score,
-    }));
+    const prospects = (dossiers || []).map(d => {
+      // Return dossier data if it exists and status is not 'failed'
+      // This allows showing partial data even when research is still in progress
+      const shouldIncludeDossier = d.dossier && d.status !== 'failed';
+      
+      return {
+        prospectId: d.prospect_key,
+        name: d.prospect_name,
+        state: d.prospect_state,
+        lat: d.prospect_lat,
+        lng: d.prospect_lng,
+        dossierStatus: d.status,
+        dossierLastUpdated: d.last_updated,
+        dossier: shouldIncludeDossier ? d.dossier : undefined,
+        angles: d.dossier?.anglesForList,
+        score: d.dossier?.score,
+      };
+    });
 
     const formattedJobs = (jobs || []).map(j => ({
       id: j.id,

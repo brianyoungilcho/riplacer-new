@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -66,6 +66,10 @@ export function OnboardingPage() {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('discovery'); // Workspace tab
   const [mapProspects, setMapProspects] = useState<Prospect[]>([]); // Prospects for map markers (currently unused with v2)
   const [selectedProspectId, setSelectedProspectId] = useState<string | null>(null); // Selected prospect on map
+  
+  // Track previous step and product description to detect when user goes back to modify product
+  const prevStepRef = useRef<number>(1);
+  const prevProductDescriptionRef = useRef<string>('');
 
   // Load saved progress from localStorage on mount
   useEffect(() => {
@@ -73,8 +77,13 @@ export function OnboardingPage() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setData(parsed.data || initialData);
-        setStep(parsed.step || 1);
+        const loadedData = parsed.data || initialData;
+        const loadedStep = parsed.step || 1;
+        setData(loadedData);
+        setStep(loadedStep);
+        // Initialize refs with loaded data
+        prevStepRef.current = loadedStep;
+        prevProductDescriptionRef.current = loadedData.productDescription || '';
         // Also check if already launched
         if (parsed.isLaunched) {
           setIsLaunched(true);
@@ -85,36 +94,92 @@ export function OnboardingPage() {
     }
   }, []);
 
-  // Save progress to localStorage on data/step change
+  // Debounced localStorage save to prevent blocking main thread
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
-    localStorage.setItem('riplacer_onboarding_progress', JSON.stringify({ data, step, isLaunched }));
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    // Debounce localStorage writes by 500ms
+    saveTimeoutRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem('riplacer_onboarding_progress', JSON.stringify({ data, step, isLaunched }));
+      } catch (err) {
+        console.error('Failed to save to localStorage:', err);
+      }
+    }, 500);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [data, step, isLaunched]);
 
   const updateData = useCallback((updates: Partial<OnboardingData>) => {
     setData(prev => ({ ...prev, ...updates }));
   }, []);
   
+  // Detect when user navigates back to step 1 from a later step (especially step 4)
+  // Clear competitor suggestions so they can be re-fetched if product changes
+  useEffect(() => {
+    const prevStep = prevStepRef.current;
+    
+    // If user navigated back to step 1 from step 2+ (especially step 4 where competitors are shown)
+    if (step === 1 && prevStep > 1 && prevStep <= 4) {
+      console.log('🔄 [Frontend] User navigated back to step 1 from step', prevStep, '- clearing competitor suggestions');
+      updateData({ 
+        suggestedCompetitors: undefined,
+        competitorResearchLoading: false,
+        competitorResearchFailed: false,
+      });
+    }
+    
+    prevStepRef.current = step;
+  }, [step, updateData]);
+  
   // Trigger early competitor research when Step 1 is completed
   // This runs in the background so suggestions are ready by Step 4
+  // Also re-runs if product description changed after user went back to edit
   useEffect(() => {
     const triggerCompetitorResearch = async () => {
-      // Only trigger if:
+      // Trigger if:
       // 1. We just completed step 1 (now on step 2+)
       // 2. We have a product description
-      // 3. We haven't already loaded suggestions
+      // 3. Either:
+      //    a. We haven't already loaded suggestions, OR
+      //    b. The product description changed (user went back and modified it)
       // 4. We're not already loading
-      if (
+      const productDescriptionChanged = 
+        prevProductDescriptionRef.current && 
+        prevProductDescriptionRef.current !== data.productDescription;
+      
+      const shouldTrigger = 
         step >= 2 && 
         data.productDescription && 
-        !data.suggestedCompetitors && 
-        !data.competitorResearchLoading
-      ) {
-        updateData({ competitorResearchLoading: true });
+        !data.competitorResearchLoading &&
+        (!data.suggestedCompetitors || productDescriptionChanged);
+      
+      if (shouldTrigger) {
+        // If product description changed, clear old suggestions first
+        if (productDescriptionChanged) {
+          console.log('🔄 [Frontend] Product description changed - clearing old competitor suggestions');
+          updateData({ 
+            suggestedCompetitors: undefined,
+            competitorResearchLoading: true,
+            competitorResearchFailed: false,
+          });
+        } else {
+          updateData({ competitorResearchLoading: true });
+        }
         
         try {
           console.log('🔍 [Frontend] Triggering competitor research for:', {
             productDescription: data.productDescription,
             companyDomain: data.companyDomain,
+            productDescriptionChanged,
           });
           
           const { data: response, error } = await supabase.functions.invoke('research-competitors', {
@@ -150,6 +215,11 @@ export function OnboardingPage() {
           console.error('Failed to fetch competitor suggestions:', error);
           updateData({ competitorResearchLoading: false });
         }
+      }
+      
+      // Update the ref to track product description for next comparison
+      if (data.productDescription) {
+        prevProductDescriptionRef.current = data.productDescription;
       }
     };
     
@@ -252,7 +322,6 @@ export function OnboardingPage() {
       
       // Transition to workspace mode
       setIsLaunched(true);
-      toast.success('Finding prospects...');
     } catch (error) {
       console.error('Failed to launch:', error);
       toast.error('Something went wrong. Please try again.');

@@ -1,8 +1,8 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo, useDeferredValue } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscoverySession, type DiscoverySessionCriteria, type DiscoveryProspect } from '@/hooks/useDiscoverySession';
 import { useDiscoveryPolling } from '@/hooks/useDiscoveryPolling';
-import { AdvantagesBrief, ProspectDossierCard, AccountPlanView, type AccountPlan } from '@/components/discovery-v2';
+import { AdvantagesBrief, ProspectDossierCardMemo, ProspectDossierCard, AccountPlanView, type AccountPlan } from '@/components/discovery-v2';
 import { Loader2, Lock, Zap, Search, SlidersHorizontal, ArrowUpDown, ChevronDown, X, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -43,6 +43,8 @@ export function DiscoveryV2Tab({
   
   // Search, Sort, and Filter state
   const [searchQuery, setSearchQuery] = useState('');
+  // Use deferred value for search to debounce filtering (React 18+)
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [sortBy, setSortBy] = useState<SortOption>('score');
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
@@ -67,11 +69,11 @@ export function DiscoveryV2Tab({
     clearSession,
   } = useDiscoverySession();
 
-  // Polling for updates
+  // Polling for updates - using 6 second interval for better performance
   const { isPolling, stopPolling } = useDiscoveryPolling({
     sessionId: session?.id || null,
     enabled: !!session && progress < 100,
-    intervalMs: 3000,
+    intervalMs: 6000, // Increased from 3000 to 6000ms for better performance
     onUpdate: () => {
       // State is automatically updated in useDiscoverySession via fetchSession
     },
@@ -142,18 +144,28 @@ export function DiscoveryV2Tab({
       toast.error('Sign up to unlock all prospects');
       return;
     }
-    const newExpanded = expandedProspectId === prospect.prospectId ? null : prospect.prospectId;
+    const isCurrentlyExpanded = expandedProspectId === prospect.prospectId;
+    const newExpanded = isCurrentlyExpanded ? null : prospect.prospectId;
+    
     setExpandedProspectId(newExpanded);
-    onProspectSelect?.(newExpanded ? prospect : null);
+    
+    // Only notify map when opening a card (not when closing)
+    // This ensures map pans to prospect immediately when card opens, not when it closes
+    if (!isCurrentlyExpanded && newExpanded) {
+      // Opening: notify map to pan to this prospect immediately
+      onProspectSelect?.(prospect);
+    }
+    // When closing, we don't notify the map - it stays centered on the last selected prospect
+    // This prevents the map from panning when closing a card
   };
 
-  // Filter and sort prospects
+  // Filter and sort prospects - using deferredSearchQuery for smooth typing
   const filteredAndSortedProspects = useMemo(() => {
     let result = [...prospects];
     
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
+    // Apply search filter (using deferred value for debouncing)
+    if (deferredSearchQuery.trim()) {
+      const query = deferredSearchQuery.toLowerCase();
       result = result.filter(p => 
         p.name.toLowerCase().includes(query) ||
         (p.dossier?.summary || '').toLowerCase().includes(query)
@@ -189,7 +201,7 @@ export function DiscoveryV2Tab({
     });
     
     return result;
-  }, [prospects, searchQuery, filters, sortBy]);
+  }, [prospects, deferredSearchQuery, filters, sortBy]);
   
   // Count active filters
   const activeFilterCount = filters.scoreRange !== 'all' ? 1 : 0;
@@ -200,11 +212,16 @@ export function DiscoveryV2Tab({
     return filtered;
   }, [filteredAndSortedProspects, user]);
 
+  // Memoize the callback to prevent unnecessary parent re-renders
+  const handleProspectsChange = useCallback((prospects: DiscoveryProspect[]) => {
+    onProspectsChange?.(prospects);
+  }, [onProspectsChange]);
+
   // Notify parent when prospects change (for map) - only send visible prospects (already limited to 3 for unauth)
   useEffect(() => {
     // visibleProspects already limits to 3 for unauth users, so just pass it directly
-    onProspectsChange?.(visibleProspects);
-  }, [visibleProspects, onProspectsChange]);
+    handleProspectsChange(visibleProspects);
+  }, [visibleProspects, handleProspectsChange]);
   
   const lockedProspects = user ? [] : filteredAndSortedProspects.slice(UNAUTH_PROSPECT_LIMIT);
   const hiddenProspectCount = lockedProspects.length;
@@ -258,19 +275,19 @@ export function DiscoveryV2Tab({
 
   // Skeleton loader component
   const SkeletonCard = () => (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 animate-pulse">
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
       <div className="flex items-start gap-3">
-        <div className="w-14 h-14 rounded-xl bg-gray-200" />
+        <div className="w-14 h-14 rounded-xl bg-gray-200 skeleton-shimmer relative overflow-hidden" />
         <div className="flex-1">
-          <div className="h-5 bg-gray-200 rounded w-48 mb-2" />
-          <div className="h-4 bg-gray-100 rounded w-32 mb-2" />
-          <div className="h-3 bg-gray-100 rounded w-24" />
+          <div className="h-5 bg-gray-200 rounded w-48 mb-2 skeleton-shimmer relative overflow-hidden" />
+          <div className="h-4 bg-gray-100 rounded w-32 mb-2 skeleton-shimmer relative overflow-hidden" />
+          <div className="h-3 bg-gray-100 rounded w-24 skeleton-shimmer relative overflow-hidden" />
         </div>
-        <div className="w-9 h-9 rounded-lg bg-gray-100" />
+        <div className="w-9 h-9 rounded-lg bg-gray-100 skeleton-shimmer relative overflow-hidden" />
       </div>
       <div className="mt-4 space-y-2">
-        <div className="h-3 bg-gray-100 rounded w-full" />
-        <div className="h-3 bg-gray-100 rounded w-3/4" />
+        <div className="h-3 bg-gray-100 rounded w-full skeleton-shimmer relative overflow-hidden" />
+        <div className="h-3 bg-gray-100 rounded w-3/4 skeleton-shimmer relative overflow-hidden" />
       </div>
     </div>
   );
@@ -450,10 +467,18 @@ export function DiscoveryV2Tab({
 
         {/* Prospects List */}
         <div className="space-y-3">
-          {visibleProspects.length > 0 ? (
+          {/* Loading skeletons - show when discovery is starting or loading */}
+          {(((isCreating || isLoading) && prospects.length === 0) || 
+            (session && prospects.length === 0 && (isLoading || isPolling || progress < 100))) ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          ) : visibleProspects.length > 0 ? (
             <>
               {visibleProspects.map((prospect) => (
-                <ProspectDossierCard
+                <ProspectDossierCardMemo
                   key={prospect.prospectId}
                   prospect={prospect}
                   isExpanded={expandedProspectId === prospect.prospectId}
@@ -484,7 +509,7 @@ export function DiscoveryV2Tab({
                 </div>
               ))}
             </>
-          ) : searchQuery.trim().length > 2 ? (
+          ) : deferredSearchQuery.trim().length > 2 ? (
             /* No results - show add prospect prompt */
             <div className="bg-white border border-gray-200 rounded-xl p-6 text-center">
               <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
@@ -492,14 +517,14 @@ export function DiscoveryV2Tab({
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-1">No prospects found</h3>
               <p className="text-sm text-gray-500 mb-4">
-                Can't find "{searchQuery}"? Add it as a new prospect.
+                Can't find "{deferredSearchQuery}"? Add it as a new prospect.
               </p>
               {user ? (
                 <button
                   onClick={() => toast.info('Add prospect feature coming soon')}
                   className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors"
                 >
-                  Add "{searchQuery}"
+                  Add "{deferredSearchQuery}"
                 </button>
               ) : (
                 <div className="space-y-3">
@@ -528,15 +553,6 @@ export function DiscoveryV2Tab({
               Sign Up Free →
             </a>
             <p className="text-xs text-gray-500 mt-3">No credit card required</p>
-          </div>
-        )}
-
-        {/* Loading skeletons - show when loading or when session exists but no prospects yet */}
-        {((!session && (isCreating || isLoading)) || (session && prospects.length === 0 && isLoading)) && (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <SkeletonCard key={i} />
-            ))}
           </div>
         )}
       </div>

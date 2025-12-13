@@ -194,6 +194,26 @@ export function OnboardingMap({ data, step, prospects = [], selectedProspectId, 
       map.current = null;
     };
   }, [mapboxToken]);
+
+  // Resize map when container size changes (handles ResizablePanel resizing)
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !mapContainer.current) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      // Small delay to ensure DOM has updated
+      setTimeout(() => {
+        if (map.current) {
+          map.current.resize();
+        }
+      }, 0);
+    });
+
+    resizeObserver.observe(mapContainer.current);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [mapLoaded]);
   
   // Update state highlighting when selected states change
   useEffect(() => {

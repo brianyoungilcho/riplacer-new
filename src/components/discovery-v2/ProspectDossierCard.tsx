@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { 
   ChevronDown, 
   ChevronUp, 
@@ -35,8 +35,10 @@ export function ProspectDossierCard({
   const [showAllAngles, setShowAllAngles] = useState(false);
   
   const dossier = prospect.dossier;
-  const isReady = prospect.dossierStatus === 'ready' && dossier;
-  const isResearching = prospect.dossierStatus === 'researching' || prospect.researchStatus === 'researching';
+  // Show dossier content if it exists and status is not failed
+  // This allows showing partial data even when research is still in progress
+  const isReady = (prospect.dossierStatus === 'ready' || prospect.dossierStatus === 'researching') && dossier;
+  const isResearching = (prospect.dossierStatus === 'researching' || prospect.researchStatus === 'researching') && !dossier;
   const isFailed = prospect.dossierStatus === 'failed' || prospect.researchStatus === 'failed';
 
   const score = dossier?.score || prospect.score || prospect.initialScore || 0;
@@ -287,3 +289,16 @@ function DossierContent({ dossier, onGeneratePlan }: DossierContentProps) {
     </div>
   );
 }
+
+// Memoize component to prevent unnecessary re-renders when parent updates
+export const ProspectDossierCardMemo = memo(ProspectDossierCard, (prevProps, nextProps) => {
+  // Custom comparison function - only re-render if relevant props changed
+  return (
+    prevProps.prospect.prospectId === nextProps.prospect.prospectId &&
+    prevProps.prospect.dossierStatus === nextProps.prospect.dossierStatus &&
+    prevProps.prospect.researchStatus === nextProps.prospect.researchStatus &&
+    prevProps.isExpanded === nextProps.isExpanded &&
+    prevProps.showGeneratePlan === nextProps.showGeneratePlan &&
+    JSON.stringify(prevProps.prospect.dossier) === JSON.stringify(nextProps.prospect.dossier)
+  );
+});

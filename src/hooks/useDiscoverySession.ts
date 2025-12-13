@@ -129,6 +129,19 @@ export interface DiscoverySessionState {
   progress: number;
 }
 
+// Shallow comparison helper to prevent unnecessary state updates
+function isStateEqual(prev: DiscoverySessionState, next: DiscoverySessionState): boolean {
+  return (
+    prev.session?.id === next.session?.id &&
+    prev.advantageBriefStatus === next.advantageBriefStatus &&
+    prev.progress === next.progress &&
+    prev.prospects.length === next.prospects.length &&
+    prev.jobs.length === next.jobs.length &&
+    JSON.stringify(prev.prospects.map(p => ({ id: p.prospectId, status: p.dossierStatus }))) ===
+    JSON.stringify(next.prospects.map(p => ({ id: p.prospectId, status: p.dossierStatus })))
+  );
+}
+
 export function useDiscoverySession() {
   const [sessionState, setSessionState] = useState<DiscoverySessionState>({
     session: null,
@@ -142,12 +155,103 @@ export function useDiscoverySession() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch session state (polling endpoint) - defined first so restoreSession can use it
+  const fetchSession = useCallback(async (sessionId: string, processNextJob = true) => {
+    setIsLoading(true);
+
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('get-discovery-session', {
+        body: { sessionId, processNextJob },
+      });
+
+      if (fnError) throw fnError;
+
+      const newState: DiscoverySessionState = {
+        session: data.session,
+        advantageBrief: data.advantageBrief || null,
+        advantageBriefStatus: data.advantageBriefStatus || 'pending',
+        prospects: data.prospects || [],
+        jobs: data.jobs || [],
+        progress: data.progress || 0,
+      };
+
+      // Only update state if data actually changed (shallow comparison)
+      setSessionState(prev => {
+        if (isStateEqual(prev, newState)) {
+          return prev; // Return previous state to prevent re-render
+        }
+        return newState;
+      });
+
+      return data;
+    } catch (err: any) {
+      const message = err.message || 'Failed to fetch session';
+      setError(message);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Create a hash of criteria for localStorage key
+  const getCriteriaHash = useCallback((criteria: DiscoverySessionCriteria): string => {
+    return JSON.stringify({
+      productDescription: criteria.productDescription,
+      states: criteria.territory?.states?.sort(),
+      categories: criteria.targetCategories?.sort(),
+      competitors: criteria.competitors?.sort(),
+      companyDomain: criteria.companyDomain,
+    });
+  }, []);
+
+  // Restore session from localStorage if criteria matches
+  const restoreSession = useCallback(async (criteria: DiscoverySessionCriteria): Promise<string | null> => {
+    try {
+      const criteriaHash = getCriteriaHash(criteria);
+      const saved = localStorage.getItem(`riplacer_discovery_session_${criteriaHash}`);
+      
+      if (!saved) return null;
+
+      const { sessionId, timestamp } = JSON.parse(saved);
+      
+      // Check if session is less than 7 days old
+      const sessionAge = Date.now() - timestamp;
+      const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
+      
+      if (sessionAge > maxAge) {
+        localStorage.removeItem(`riplacer_discovery_session_${criteriaHash}`);
+        return null;
+      }
+
+      // Try to fetch the session to verify it still exists
+      const sessionData = await fetchSession(sessionId, false);
+      if (sessionData) {
+        return sessionId;
+      } else {
+        // Session doesn't exist, remove from localStorage
+        localStorage.removeItem(`riplacer_discovery_session_${criteriaHash}`);
+        return null;
+      }
+    } catch (err) {
+      console.error('Failed to restore session:', err);
+      return null;
+    }
+  }, [getCriteriaHash, fetchSession]);
+
   // Create a new discovery session (works for both auth and anon users)
   const createSession = useCallback(async (criteria: DiscoverySessionCriteria) => {
     setIsCreating(true);
     setError(null);
 
     try {
+      // First try to restore existing session
+      const restoredSessionId = await restoreSession(criteria);
+      if (restoredSessionId) {
+        console.log('Restored existing session:', restoredSessionId);
+        return restoredSessionId;
+      }
+
+      // Create new session if none found
       const { data, error: fnError } = await supabase.functions.invoke('create-discovery-session', {
         body: criteria,
       });
@@ -167,6 +271,13 @@ export function useDiscoverySession() {
         session: newSession,
       }));
 
+      // Save session ID to localStorage
+      const criteriaHash = getCriteriaHash(criteria);
+      localStorage.setItem(`riplacer_discovery_session_${criteriaHash}`, JSON.stringify({
+        sessionId: data.sessionId,
+        timestamp: Date.now(),
+      }));
+
       return data.sessionId;
     } catch (err: any) {
       const message = err.message || 'Failed to create session';
@@ -176,37 +287,7 @@ export function useDiscoverySession() {
     } finally {
       setIsCreating(false);
     }
-  }, []);
-
-  // Fetch session state (polling endpoint)
-  const fetchSession = useCallback(async (sessionId: string, processNextJob = true) => {
-    setIsLoading(true);
-
-    try {
-      const { data, error: fnError } = await supabase.functions.invoke('get-discovery-session', {
-        body: { sessionId, processNextJob },
-      });
-
-      if (fnError) throw fnError;
-
-      setSessionState({
-        session: data.session,
-        advantageBrief: data.advantageBrief || null,
-        advantageBriefStatus: data.advantageBriefStatus || 'pending',
-        prospects: data.prospects || [],
-        jobs: data.jobs || [],
-        progress: data.progress || 0,
-      });
-
-      return data;
-    } catch (err: any) {
-      const message = err.message || 'Failed to fetch session';
-      setError(message);
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  }, [restoreSession, getCriteriaHash]);
 
   // Discover prospects (v2) - works for both auth and anon
   const discoverProspects = useCallback(async (sessionId: string, criteria: DiscoverySessionCriteria, limit = 8) => {
@@ -297,6 +378,19 @@ export function useDiscoverySession() {
       progress: 0,
     });
     setError(null);
+    
+    // Clear all discovery session entries from localStorage
+    // This is a cleanup operation, so we clear all to be safe
+    try {
+      const keys = Object.keys(localStorage);
+      keys.forEach(key => {
+        if (key.startsWith('riplacer_discovery_session_')) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch (err) {
+      console.error('Failed to clear localStorage sessions:', err);
+    }
   }, []);
 
   return {

@@ -248,6 +248,29 @@
     animation: float 6s ease-in-out infinite;
   }
 
+  /* Skeleton shimmer effect */
+  .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .skeleton-shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.5) 50%,
+      transparent 100%
+    );
+    animation: shimmer 2s ease-in-out infinite;
+    pointer-events: none;
+  }
+
   /* Subtle dotted background with gentle float (used on /start) */
   .dotted-bg {
     position: absolute;
@@ -272,6 +295,15 @@
 @keyframes dotted-gentle-float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-18px); }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 /* Mapbox overrides */

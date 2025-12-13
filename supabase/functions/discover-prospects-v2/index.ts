@@ -67,6 +67,49 @@ function randomOffset(scale: number = 0.5): number {
   return (Math.random() - 0.5) * scale;
 }
 
+// Geocode prospect location using Mapbox Geocoding API
+async function geocodeProspect(name: string, city: string, state: string): Promise<{ lat: number; lng: number } | null> {
+  const mapboxToken = Deno.env.get('MAPBOX_ACCESS_TOKEN');
+  if (!mapboxToken) {
+    console.warn('MAPBOX_ACCESS_TOKEN not configured, using fallback coordinates');
+    return null;
+  }
+
+  try {
+    // Try geocoding with organization name + city + state for best accuracy
+    const query = `${name}, ${city}, ${state}, USA`;
+    const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&limit=1&types=poi,address,place`;
+    
+    const response = await fetch(geocodeUrl);
+    const data = await response.json();
+
+    if (data.features && data.features.length > 0) {
+      const [lng, lat] = data.features[0].center;
+      console.log(`Geocoded ${name} in ${city}, ${state}: ${lat}, ${lng}`);
+      return { lat, lng };
+    }
+
+    // Fallback: Try just city + state if organization name doesn't work
+    const cityQuery = `${city}, ${state}, USA`;
+    const cityGeocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cityQuery)}.json?access_token=${mapboxToken}&limit=1`;
+    
+    const cityResponse = await fetch(cityGeocodeUrl);
+    const cityData = await cityResponse.json();
+
+    if (cityData.features && cityData.features.length > 0) {
+      const [lng, lat] = cityData.features[0].center;
+      console.log(`Geocoded ${city}, ${state} (fallback): ${lat}, ${lng}`);
+      return { lat, lng };
+    }
+
+    console.warn(`Failed to geocode ${name} in ${city}, ${state}, using state center`);
+    return null;
+  } catch (error) {
+    console.error(`Geocoding error for ${name} in ${city}, ${state}:`, error);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -169,7 +212,7 @@ Find ${limit} government/enterprise accounts that:
 
 For each prospect, provide:
 - name: Full organization name (e.g., "Boston Police Department")
-- city: City name
+- city: City name (REQUIRED - must be included for accurate geolocation)
 - state: State name (MUST be from the specified states)
 - score: Initial confidence score 60-100
 - angles: Array of 1-2 short "how to win" tags like ["Renewal window", "Replacement play", "Budget approved", "New leadership"]
@@ -237,6 +280,27 @@ Return ONLY a valid JSON array. No explanation text.`;
       const prospectKey = createProspectKey(p.name, p.state);
       const stateCenter = STATE_CENTERS[p.state] || { lat: 39.8283, lng: -98.5795 };
       
+      // Geocode prospect location for accurate positioning
+      let coordinates = { lat: stateCenter.lat, lng: stateCenter.lng };
+      if (p.city && p.name) {
+        const geocoded = await geocodeProspect(p.name, p.city, p.state);
+        if (geocoded) {
+          coordinates = geocoded;
+        } else {
+          // Fallback to state center with small random offset if geocoding fails
+          coordinates = {
+            lat: stateCenter.lat + randomOffset(0.3),
+            lng: stateCenter.lng + randomOffset(0.3),
+          };
+        }
+      } else {
+        // If no city provided, use state center with random offset
+        coordinates = {
+          lat: stateCenter.lat + randomOffset(1.0),
+          lng: stateCenter.lng + randomOffset(1.5),
+        };
+      }
+      
       // Create dossier record (queued for research)
       const { error: dossierError } = await supabase
         .from('prospect_dossiers')
@@ -245,8 +309,8 @@ Return ONLY a valid JSON array. No explanation text.`;
           prospect_key: prospectKey,
           prospect_name: p.name,
           prospect_state: p.state,
-          prospect_lat: stateCenter.lat + randomOffset(1.0),
-          prospect_lng: stateCenter.lng + randomOffset(1.5),
+          prospect_lat: coordinates.lat,
+          prospect_lng: coordinates.lng,
           dossier: {
             score: p.score || 75,
             anglesForList: p.angles || ['Potential opportunity'],
@@ -285,8 +349,8 @@ Return ONLY a valid JSON array. No explanation text.`;
         prospectId: prospectKey,
         name: p.name,
         state: p.state,
-        lat: stateCenter.lat + randomOffset(1.0),
-        lng: stateCenter.lng + randomOffset(1.5),
+        lat: coordinates.lat,
+        lng: coordinates.lng,
         initialScore: p.score || 75,
         angles: p.angles || ['Potential opportunity'],
         researchStatus: 'queued',
