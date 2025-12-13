@@ -67,48 +67,62 @@ function randomOffset(scale: number = 0.5): number {
   return (Math.random() - 0.5) * scale;
 }
 
-// Geocode prospect location using Mapbox Geocoding API
-async function geocodeProspect(name: string, city: string, state: string): Promise<{ lat: number; lng: number } | null> {
-  const mapboxToken = Deno.env.get('MAPBOX_ACCESS_TOKEN');
-  if (!mapboxToken) {
-    console.warn('MAPBOX_ACCESS_TOKEN not configured, using fallback coordinates');
+// Geocode prospect using Mapbox API
+async function geocodeProspect(
+  name: string,
+  city: string | undefined,
+  state: string
+): Promise<{ lat: number; lng: number } | null> {
+  const MAPBOX_TOKEN = Deno.env.get('MAPBOX_ACCESS_TOKEN');
+  
+  if (!MAPBOX_TOKEN) {
+    console.log('MAPBOX_ACCESS_TOKEN not configured, skipping geocoding');
     return null;
   }
 
-  try {
-    // Try geocoding with organization name + city + state for best accuracy
-    const query = `${name}, ${city}, ${state}, USA`;
-    const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&limit=1&types=poi,address,place`;
-    
-    const response = await fetch(geocodeUrl);
-    const data = await response.json();
+  const stateCenter = STATE_CENTERS[state] || { lat: 39.8283, lng: -98.5795 };
 
-    if (data.features && data.features.length > 0) {
-      const [lng, lat] = data.features[0].center;
-      console.log(`Geocoded ${name} in ${city}, ${state}: ${lat}, ${lng}`);
-      return { lat, lng };
-    }
-
-    // Fallback: Try just city + state if organization name doesn't work
-    const cityQuery = `${city}, ${state}, USA`;
-    const cityGeocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cityQuery)}.json?access_token=${mapboxToken}&limit=1`;
-    
-    const cityResponse = await fetch(cityGeocodeUrl);
-    const cityData = await cityResponse.json();
-
-    if (cityData.features && cityData.features.length > 0) {
-      const [lng, lat] = cityData.features[0].center;
-      console.log(`Geocoded ${city}, ${state} (fallback): ${lat}, ${lng}`);
-      return { lat, lng };
-    }
-
-    console.warn(`Failed to geocode ${name} in ${city}, ${state}, using state center`);
-    return null;
-  } catch (error) {
-    console.error(`Geocoding error for ${name} in ${city}, ${state}:`, error);
-    return null;
+  // Try geocoding with organization name + city + state
+  const queries = [];
+  if (city) {
+    queries.push(`${name}, ${city}, ${state}, USA`);
+    queries.push(`${city}, ${state}, USA`);
+  } else {
+    queries.push(`${name}, ${state}, USA`);
   }
+
+  for (const query of queries) {
+    try {
+      const encodedQuery = encodeURIComponent(query);
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedQuery}.json?access_token=${MAPBOX_TOKEN}&country=US&limit=1`;
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        console.log(`Geocoding request failed for "${query}": ${response.status}`);
+        continue;
+      }
+
+      const data = await response.json();
+      
+      if (data.features && data.features.length > 0) {
+        const [lng, lat] = data.features[0].center;
+        console.log(`Geocoded "${query}" -> lat: ${lat}, lng: ${lng}`);
+        return { lat, lng };
+      }
+    } catch (e) {
+      console.error(`Geocoding error for "${query}":`, e);
+    }
+  }
+
+  // Fallback: use state center with small offset
+  console.log(`Geocoding failed for "${name}", using state center for ${state}`);
+  return {
+    lat: stateCenter.lat + randomOffset(0.3),
+    lng: stateCenter.lng + randomOffset(0.3),
+  };
 }
+
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
