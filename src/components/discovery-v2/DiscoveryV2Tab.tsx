@@ -1,14 +1,24 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscoverySession, type DiscoverySessionCriteria, type DiscoveryProspect } from '@/hooks/useDiscoverySession';
 import { useDiscoveryPolling } from '@/hooks/useDiscoveryPolling';
-import { ResearchProgress, AdvantagesBrief, ProspectDossierCard, AccountPlanView, type AccountPlan } from '@/components/discovery-v2';
-import { Loader2, RefreshCw, ChevronRight, Lock, Zap } from 'lucide-react';
+import { AdvantagesBrief, ProspectDossierCard, AccountPlanView, type AccountPlan } from '@/components/discovery-v2';
+import { Loader2, Lock, Zap, Search, SlidersHorizontal, ArrowUpDown, ChevronDown, X, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { Input } from '@/components/ui/input';
+import { STATE_ABBREVIATIONS } from '@/data/us-regions';
 
 // Unauth users see 3 prospects, rest are paywalled
 const UNAUTH_PROSPECT_LIMIT = 3;
+
+// Sort options
+type SortOption = 'score' | 'name';
+
+// Filter types
+interface Filters {
+  scoreRange: 'all' | 'above80' | '60-80' | 'below60';
+}
 
 interface DiscoveryV2TabProps {
   criteria: DiscoverySessionCriteria;
@@ -30,6 +40,15 @@ export function DiscoveryV2Tab({
   const [showBrief, setShowBrief] = useState(false);
   const [accountPlan, setAccountPlan] = useState<{ plan: AccountPlan; prospectName: string } | null>(null);
   const hasStartedRef = useRef(false);
+  
+  // Search, Sort, and Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('score');
+  const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+  const [filters, setFilters] = useState<Filters>({
+    scoreRange: 'all',
+  });
 
   const {
     session,
@@ -75,8 +94,6 @@ export function DiscoveryV2Tab({
       discoverProspects(sessionId, criteria),
       researchAdvantages(sessionId, criteria),
     ]);
-
-    toast.success('Research started!');
   }, [criteria, clearSession, createSession, discoverProspects, researchAdvantages]);
 
   // Auto-start on mount if criteria is valid and hasn't started yet
@@ -119,11 +136,6 @@ export function DiscoveryV2Tab({
     }
   }, [selectedProspectId]);
 
-  // Notify parent when prospects change (for map)
-  useEffect(() => {
-    onProspectsChange?.(prospects);
-  }, [prospects, onProspectsChange]);
-
   // Handle prospect click
   const handleProspectToggle = (prospect: DiscoveryProspect, isLocked: boolean) => {
     if (isLocked) {
@@ -135,10 +147,96 @@ export function DiscoveryV2Tab({
     onProspectSelect?.(newExpanded ? prospect : null);
   };
 
+  // Filter and sort prospects
+  const filteredAndSortedProspects = useMemo(() => {
+    let result = [...prospects];
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(p => 
+        p.name.toLowerCase().includes(query) ||
+        (p.dossier?.summary || '').toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply score filter
+    if (filters.scoreRange !== 'all') {
+      result = result.filter(p => {
+        const score = p.dossier?.score || p.score || p.initialScore || 0;
+        switch (filters.scoreRange) {
+          case 'above80': return score >= 80;
+          case '60-80': return score >= 60 && score < 80;
+          case 'below60': return score < 60;
+          default: return true;
+        }
+      });
+    }
+    
+    // Apply sorting
+    result.sort((a, b) => {
+      const scoreA = a.dossier?.score || a.score || a.initialScore || 0;
+      const scoreB = b.dossier?.score || b.score || b.initialScore || 0;
+      
+      switch (sortBy) {
+        case 'score':
+          return scoreB - scoreA;
+        case 'name':
+          return a.name.localeCompare(b.name);
+        default:
+          return 0;
+      }
+    });
+    
+    return result;
+  }, [prospects, searchQuery, filters, sortBy]);
+  
+  // Count active filters
+  const activeFilterCount = filters.scoreRange !== 'all' ? 1 : 0;
+  
   // Determine which prospects to show and which are locked
-  const visibleProspects = user ? prospects : prospects.slice(0, UNAUTH_PROSPECT_LIMIT);
-  const lockedProspects = user ? [] : prospects.slice(UNAUTH_PROSPECT_LIMIT);
+  const visibleProspects = useMemo(() => {
+    const filtered = user ? filteredAndSortedProspects : filteredAndSortedProspects.slice(0, UNAUTH_PROSPECT_LIMIT);
+    return filtered;
+  }, [filteredAndSortedProspects, user]);
+
+  // Notify parent when prospects change (for map) - only send visible prospects (already limited to 3 for unauth)
+  useEffect(() => {
+    // visibleProspects already limits to 3 for unauth users, so just pass it directly
+    onProspectsChange?.(visibleProspects);
+  }, [visibleProspects, onProspectsChange]);
+  
+  const lockedProspects = user ? [] : filteredAndSortedProspects.slice(UNAUTH_PROSPECT_LIMIT);
   const hiddenProspectCount = lockedProspects.length;
+  
+  // Sort option labels
+  const sortLabels: Record<SortOption, string> = {
+    score: 'Riplace Score',
+    name: 'Name (A-Z)',
+  };
+  
+  // Clear filters
+  const clearAllFilters = useCallback(() => {
+    setFilters({ scoreRange: 'all' });
+    setSearchQuery('');
+  }, []);
+  
+  const clearFilter = useCallback((filterType: 'scoreRange') => {
+    setFilters(prev => ({ ...prev, [filterType]: 'all' }));
+  }, []);
+  
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-dropdown]')) {
+        setSortDropdownOpen(false);
+        setFilterDropdownOpen(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   // No valid criteria - show prompt
   const hasValidCriteria = 
@@ -158,115 +256,264 @@ export function DiscoveryV2Tab({
     );
   }
 
-  // Loading initial session
-  if (!session && (isCreating || isLoading)) {
-    return (
-      <div className={cn("flex flex-col items-center justify-center h-full p-8", className)}>
-        <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Starting Research...</h3>
-        <p className="text-gray-500 text-center">
-          Our AI is finding the best prospects for you.
-        </p>
+  // Skeleton loader component
+  const SkeletonCard = () => (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 animate-pulse">
+      <div className="flex items-start gap-3">
+        <div className="w-14 h-14 rounded-xl bg-gray-200" />
+        <div className="flex-1">
+          <div className="h-5 bg-gray-200 rounded w-48 mb-2" />
+          <div className="h-4 bg-gray-100 rounded w-32 mb-2" />
+          <div className="h-3 bg-gray-100 rounded w-24" />
+        </div>
+        <div className="w-9 h-9 rounded-lg bg-gray-100" />
       </div>
-    );
-  }
+      <div className="mt-4 space-y-2">
+        <div className="h-3 bg-gray-100 rounded w-full" />
+        <div className="h-3 bg-gray-100 rounded w-3/4" />
+      </div>
+    </div>
+  );
 
   return (
     <div className={cn("h-full flex flex-col bg-gray-50", className)}>
       {/* Header */}
-      <div className="px-4 py-3 bg-white border-b border-gray-200">
-        <div className="flex items-center justify-between">
+      <div className="px-6 py-4 bg-white border-b border-gray-200">
+        <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
               Discovery
             </h2>
-            <p className="text-sm text-gray-500">
-              {prospects.length} prospects found • {progress}% complete
-            </p>
+            <p className="text-sm text-gray-500">Sorted by {sortLabels[sortBy]}</p>
           </div>
-          <button
-            onClick={() => {
-              hasStartedRef.current = false;
-              startDiscovery();
-            }}
-            disabled={isPolling || isCreating}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <RefreshCw className={cn("w-4 h-4", (isPolling || isCreating) && "animate-spin")} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Strategic Advantage Brief Button */}
+            {(advantageBriefStatus === 'ready' || advantageBriefStatus === 'researching') && (
+              <div className="relative" data-dropdown>
+                <button
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setShowBrief(!showBrief);
+                    setSortDropdownOpen(false);
+                    setFilterDropdownOpen(false);
+                  }}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors",
+                    showBrief && "bg-gray-50 border-gray-300"
+                  )}
+                >
+                  <FileText className="w-4 h-4" />
+                  Strategic Brief
+                  {!showBrief && advantageBriefStatus === 'ready' && (
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full" />
+                  )}
+                </button>
+              </div>
+            )}
+            
+            {/* Sort Dropdown */}
+            <div className="relative" data-dropdown>
+              <button
+                onClick={(e) => { e.stopPropagation(); setSortDropdownOpen(!sortDropdownOpen); setFilterDropdownOpen(false); }}
+                className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <ArrowUpDown className="w-4 h-4" />
+                Sort
+                <ChevronDown className="w-4 h-4" />
+              </button>
+              {sortDropdownOpen && (
+                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+                  {(['score', 'name'] as SortOption[]).map(option => (
+                    <button
+                      key={option}
+                      onClick={() => { setSortBy(option); setSortDropdownOpen(false); }}
+                      className={cn(
+                        "w-full text-left px-4 py-2 text-sm hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg",
+                        sortBy === option ? "bg-gray-50 text-primary font-medium" : "text-gray-700"
+                      )}
+                    >
+                      {sortLabels[option]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Filter Dropdown */}
+            <div className="relative" data-dropdown>
+              <button
+                onClick={(e) => { e.stopPropagation(); setFilterDropdownOpen(!filterDropdownOpen); setSortDropdownOpen(false); }}
+                className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+              {filterDropdownOpen && (
+                <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-20 p-4 space-y-4">
+                  {/* Score Range */}
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Riplace Score</p>
+                    <div className="space-y-1">
+                      {[
+                        { value: 'all', label: 'All scores' },
+                        { value: 'above80', label: '80+ (Hot)' },
+                        { value: '60-80', label: '60-80 (Warm)' },
+                        { value: 'below60', label: 'Below 60' },
+                      ].map(option => (
+                        <button
+                          key={option.value}
+                          onClick={() => setFilters(prev => ({ ...prev, scoreRange: option.value as Filters['scoreRange'] }))}
+                          className={cn(
+                            "w-full text-left px-3 py-1.5 rounded text-sm transition-colors",
+                            filters.scoreRange === option.value
+                              ? "bg-primary/10 text-primary font-medium"
+                              : "text-gray-600 hover:bg-gray-50"
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {activeFilterCount > 0 && (
+                    <button
+                      onClick={clearAllFilters}
+                      className="w-full text-center text-sm text-gray-500 hover:text-gray-700 pt-2 border-t border-gray-100"
+                    >
+                      Clear all filters
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+        
+        {/* Search Bar */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search prospects or type to add new..."
+            className="pl-10 pr-10 h-10 bg-gray-50 border-gray-200 focus-visible:ring-primary"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center transition-colors"
+            >
+              <X className="w-3 h-3 text-gray-600" />
+            </button>
+          )}
+        </div>
+        
+        {/* Active Filters */}
+        {(activeFilterCount > 0 || searchQuery) && (
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 flex-wrap">
+            <span className="text-sm text-gray-500">Active:</span>
+            {searchQuery && (
+              <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
+                Search: "{searchQuery.slice(0, 20)}{searchQuery.length > 20 ? '...' : ''}"
+                <button onClick={() => setSearchQuery('')} className="hover:text-gray-900">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {filters.scoreRange !== 'all' && (
+              <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-50 text-purple-700 rounded-full text-sm">
+                Score: {filters.scoreRange === 'above80' ? '80+' : filters.scoreRange === '60-80' ? '60-80' : '<60'}
+                <button onClick={() => clearFilter('scoreRange')} className="hover:opacity-70">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            <button onClick={clearAllFilters} className="text-sm text-gray-500 hover:text-gray-700 ml-2">
+              Clear all
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Progress indicator */}
-        {jobs.length > 0 && progress < 100 && (
-          <ResearchProgress jobs={jobs} progress={progress} />
-        )}
-
-        {/* Advantage Brief Toggle */}
-        {(advantageBriefStatus === 'ready' || advantageBriefStatus === 'researching') && (
-          <button
-            onClick={() => setShowBrief(!showBrief)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Zap className="w-4 h-4 text-primary" />
-              </div>
-              <div className="text-left">
-                <h4 className="font-medium text-gray-900">Strategic Advantage Brief</h4>
-                <p className="text-xs text-gray-500">
-                  {advantageBriefStatus === 'researching' ? 'Researching...' : 'View competitive intelligence'}
-                </p>
-              </div>
-            </div>
-            <ChevronRight className={cn(
-              "w-5 h-5 text-gray-400 transition-transform",
-              showBrief && "rotate-90"
-            )} />
-          </button>
-        )}
-
-        {/* Advantage Brief Content */}
+        {/* Advantage Brief Content - shown when button is active */}
         {showBrief && advantageBrief && (
-          <AdvantagesBrief brief={advantageBrief} />
+          <AdvantagesBrief brief={advantageBrief} sessionId={session?.id || null} />
         )}
 
-        {/* Visible Prospects List */}
+        {/* Prospects List */}
         <div className="space-y-3">
-          {visibleProspects.map((prospect) => (
-            <ProspectDossierCard
-              key={prospect.prospectId}
-              prospect={prospect}
-              isExpanded={expandedProspectId === prospect.prospectId}
-              onToggle={() => handleProspectToggle(prospect, false)}
-              onGeneratePlan={() => handleGeneratePlan(prospect.prospectId, prospect.name)}
-              showGeneratePlan={!!user}
-            />
-          ))}
-
-          {/* Locked prospects preview (blurred) */}
-          {lockedProspects.slice(0, 2).map((prospect) => (
-            <div 
-              key={prospect.prospectId}
-              onClick={() => handleProspectToggle(prospect, true)}
-              className="relative cursor-pointer"
-            >
-              <div className="blur-sm pointer-events-none">
+          {visibleProspects.length > 0 ? (
+            <>
+              {visibleProspects.map((prospect) => (
                 <ProspectDossierCard
+                  key={prospect.prospectId}
                   prospect={prospect}
-                  isExpanded={false}
-                  onToggle={() => {}}
-                  onGeneratePlan={() => {}}
+                  isExpanded={expandedProspectId === prospect.prospectId}
+                  onToggle={() => handleProspectToggle(prospect, false)}
+                  onGeneratePlan={() => handleGeneratePlan(prospect.prospectId, prospect.name)}
+                  showGeneratePlan={!!user}
                 />
+              ))}
+
+              {/* Locked prospects preview (blurred) */}
+              {lockedProspects.slice(0, 2).map((prospect) => (
+                <div 
+                  key={prospect.prospectId}
+                  onClick={() => handleProspectToggle(prospect, true)}
+                  className="relative cursor-pointer"
+                >
+                  <div className="blur-sm pointer-events-none">
+                    <ProspectDossierCard
+                      prospect={prospect}
+                      isExpanded={false}
+                      onToggle={() => {}}
+                      onGeneratePlan={() => {}}
+                    />
+                  </div>
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-900/10 rounded-xl">
+                    <Lock className="w-5 h-5 text-gray-600" />
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : searchQuery.trim().length > 2 ? (
+            /* No results - show add prospect prompt */
+            <div className="bg-white border border-gray-200 rounded-xl p-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                <Search className="w-6 h-6 text-gray-400" />
               </div>
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-900/10 rounded-xl">
-                <Lock className="w-5 h-5 text-gray-600" />
-              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">No prospects found</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Can't find "{searchQuery}"? Add it as a new prospect.
+              </p>
+              {user ? (
+                <button
+                  onClick={() => toast.info('Add prospect feature coming soon')}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors"
+                >
+                  Add "{searchQuery}"
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-gray-400">Sign up to add custom prospects</p>
+                  <a
+                    href="/auth"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors"
+                  >
+                    Sign Up Free
+                  </a>
+                </div>
+              )}
             </div>
-          ))}
+          ) : null}
         </div>
 
         {/* Unauth user paywall card */}
@@ -284,32 +531,12 @@ export function DiscoveryV2Tab({
           </div>
         )}
 
-        {/* Loading skeletons */}
-        {isLoading && prospects.length === 0 && (
+        {/* Loading skeletons - show when loading or when session exists but no prospects yet */}
+        {((!session && (isCreating || isLoading)) || (session && prospects.length === 0 && isLoading)) && (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 animate-pulse">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gray-200" />
-                  <div className="flex-1">
-                    <div className="h-4 bg-gray-200 rounded w-32 mb-2" />
-                    <div className="h-3 bg-gray-100 rounded w-24" />
-                  </div>
-                  <div className="w-8 h-8 rounded-full bg-gray-200" />
-                </div>
-                <div className="mt-3 space-y-2">
-                  <div className="h-3 bg-gray-100 rounded w-full" />
-                  <div className="h-3 bg-gray-100 rounded w-3/4" />
-                </div>
-              </div>
+              <SkeletonCard key={i} />
             ))}
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!isLoading && prospects.length === 0 && session && (
-          <div className="flex flex-col items-center justify-center py-12">
-            <p className="text-gray-500">No prospects found yet. Research is in progress...</p>
           </div>
         )}
       </div>

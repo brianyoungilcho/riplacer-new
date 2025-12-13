@@ -52,11 +52,7 @@ function LandingPage() {
             
             {/* Main headline */}
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight text-gray-900 leading-[1.1] mb-6">
-              <span className="relative inline-block">
-                <span className="relative z-10">Rip</span>
-                <span className="absolute bottom-2 left-0 w-full h-3 bg-primary/20 -z-0" />
-              </span>
-              {" "}out your{" "}
+              Rip{" "}out your{" "}
               <br className="hidden sm:block" />
               competition.{" "}
               <span className="text-primary">Win.</span>

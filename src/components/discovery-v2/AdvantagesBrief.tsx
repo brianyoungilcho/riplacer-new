@@ -1,24 +1,57 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink, Lightbulb, Shield, MessageSquare } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronDown, ChevronUp, ExternalLink, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import type { AdvantageBrief, Advantage } from '@/hooks/useDiscoverySession';
 
 interface AdvantagesBriefProps {
   brief: AdvantageBrief;
+  sessionId?: string | null;
   className?: string;
 }
 
-export function AdvantagesBrief({ brief, className }: AdvantagesBriefProps) {
+export function AdvantagesBrief({ brief, sessionId, className }: AdvantagesBriefProps) {
   const [expandedAdvantage, setExpandedAdvantage] = useState<number | null>(null);
+  const [userNotes, setUserNotes] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Load saved notes from localStorage
+  useEffect(() => {
+    if (sessionId) {
+      const saved = localStorage.getItem(`brief_notes_${sessionId}`);
+      if (saved) {
+        setUserNotes(saved);
+      }
+    }
+  }, [sessionId]);
+  
+  // Save notes to localStorage
+  const handleSaveNotes = async () => {
+    if (!sessionId) {
+      toast.error('Please sign in to save notes');
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      localStorage.setItem(`brief_notes_${sessionId}`, userNotes);
+      setIsEditing(false);
+      toast.success('Notes saved');
+    } catch (error) {
+      toast.error('Failed to save notes');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className={cn("bg-white border border-gray-200 rounded-xl overflow-hidden", className)}>
       {/* Header */}
-      <div className="px-5 py-4 bg-gradient-to-r from-primary/5 to-primary/10 border-b border-gray-100">
-        <div className="flex items-center gap-2 mb-2">
-          <Shield className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold text-gray-900">Strategic Advantage Brief</h3>
-        </div>
+      <div className="px-5 py-4 border-b border-gray-100">
+        <h3 className="font-semibold text-gray-900 mb-2">Strategic Advantage Brief</h3>
         <p className="text-sm text-gray-600">{brief.positioningSummary}</p>
       </div>
 
@@ -32,6 +65,63 @@ export function AdvantagesBrief({ brief, className }: AdvantagesBriefProps) {
             onToggle={() => setExpandedAdvantage(expandedAdvantage === idx ? null : idx)}
           />
         ))}
+      </div>
+
+      {/* User Notes Section */}
+      <div className="px-5 py-4 border-t border-gray-100 bg-gray-50">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-sm font-medium text-gray-900">Your Notes</h4>
+          {!isEditing && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="text-xs text-gray-500 hover:text-gray-700"
+            >
+              {userNotes ? 'Edit' : 'Add'}
+            </button>
+          )}
+        </div>
+        {isEditing ? (
+          <div className="space-y-2">
+            <Textarea
+              value={userNotes}
+              onChange={(e) => setUserNotes(e.target.value)}
+              placeholder="Add your own insights, context, or strategic notes here..."
+              className="min-h-[120px] text-sm resize-none border-gray-200 focus-visible:ring-primary"
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleSaveNotes}
+                disabled={isSaving}
+                size="sm"
+                className="h-8"
+              >
+                <Save className="w-3.5 h-3.5 mr-1.5" />
+                {isSaving ? 'Saving...' : 'Save'}
+              </Button>
+              <button
+                onClick={() => {
+                  setIsEditing(false);
+                  // Reload from localStorage to discard changes
+                  if (sessionId) {
+                    const saved = localStorage.getItem(`brief_notes_${sessionId}`);
+                    setUserNotes(saved || '');
+                  }
+                }}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            {userNotes ? (
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{userNotes}</p>
+            ) : (
+              <p className="text-sm text-gray-400 italic">No notes yet. Click "Add" above to add your insights.</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Footer */}
@@ -57,9 +147,6 @@ function AdvantageCard({ advantage, isExpanded, onToggle }: AdvantageCardProps) 
         onClick={onToggle}
         className="w-full flex items-start gap-3 text-left group"
       >
-        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <Lightbulb className="w-4 h-4 text-primary" />
-        </div>
         <div className="flex-1 min-w-0">
           <h4 className="font-medium text-gray-900 group-hover:text-primary transition-colors">
             {advantage.title}
@@ -78,7 +165,7 @@ function AdvantageCard({ advantage, isExpanded, onToggle }: AdvantageCardProps) 
       </button>
 
       {isExpanded && (
-        <div className="mt-4 pl-11 space-y-4">
+        <div className="mt-4 space-y-4">
           {/* Competitor Comparisons */}
           {advantage.competitorComparisons?.length > 0 && (
             <div>
@@ -122,8 +209,7 @@ function AdvantageCard({ advantage, isExpanded, onToggle }: AdvantageCardProps) 
           {/* Talk Track */}
           {advantage.talkTrackBullets?.length > 0 && (
             <div>
-              <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                <MessageSquare className="w-3.5 h-3.5" />
+              <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
                 Talk Track
               </h5>
               <ul className="space-y-1.5">
