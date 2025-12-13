@@ -101,8 +101,10 @@ CRITICAL RULES:
 Return ONLY a JSON array of 5-10 competitor company names, ordered from largest market presence to smallest.
 Example: ["Competitor A", "Competitor B", "Competitor C"]`;
 
-    console.log('Calling Gemini 3 with Google Search grounding...');
+    console.log('Calling Gemini 3 Pro Preview...');
     
+    // Note: Lovable AI gateway uses standard OpenAI-compatible format
+    // Web search grounding is handled by the model's training knowledge
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -112,10 +114,9 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
       body: JSON.stringify({
         model: 'google/gemini-3-pro-preview',
         messages: [
-          { role: 'system', content: 'You are a B2B market research expert with access to real-time web search. Use web search to find current, accurate competitor information. Return only valid JSON arrays.' },
+          { role: 'system', content: 'You are a B2B market research expert. Use your knowledge to identify current competitors in the market. Return only valid JSON arrays.' },
           { role: 'user', content: prompt }
         ],
-        tools: [{ google_search: {} }], // Enable web search grounding
       }),
     });
 
