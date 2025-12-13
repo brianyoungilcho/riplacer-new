@@ -12,23 +12,6 @@ interface StepCompetitorsProps {
   onBack: () => void;
 }
 
-// Common competitors based on industry (would be dynamically populated in real app)
-const SUGGESTED_COMPETITORS: Record<string, string[]> = {
-  'police': ['Axon', 'Motorola Solutions', 'ShotSpotter', 'Flock Safety', 'NICE', 'Genetec'],
-  'sheriff': ['Axon', 'Motorola Solutions', 'ShotSpotter', 'Flock Safety', 'NICE', 'Genetec'],
-  'fire': ['Pierce Manufacturing', 'E-ONE', 'Rosenbauer', 'Spartan Motors', 'ESO Solutions'],
-  'ems': ['ESO Solutions', 'Zoll Medical', 'Stryker', 'ImageTrend'],
-  'schools_k12': ['PowerSchool', 'Infinite Campus', 'Skyward', 'Blackboard', 'Instructure'],
-  'higher_ed': ['Ellucian', 'Oracle', 'Workday', 'Blackbaud', 'Campus Management'],
-  'transit': ['Trapeze', 'Clever Devices', 'Cubic', 'Conduent', 'GMV'],
-  'city_gov': ['Tyler Technologies', 'Accela', 'CentralSquare', 'OpenGov'],
-  'county_gov': ['Tyler Technologies', 'Accela', 'CentralSquare', 'OpenGov'],
-  'state_agency': ['Oracle', 'SAP', 'Deloitte', 'Accenture'],
-  'utilities': ['Oracle Utilities', 'SAP', 'Sensus', 'Itron'],
-  'hospitals': ['Epic', 'Cerner', 'MEDITECH', 'Allscripts'],
-  'default': ['Competitor A', 'Competitor B', 'Competitor C'],
-};
-
 export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompetitorsProps) {
   const [selectedCompetitors, setSelectedCompetitors] = useState<string[]>(data.competitors);
   const [customCompetitor, setCustomCompetitor] = useState('');
@@ -41,30 +24,9 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
   // Check if AI research is still loading
   const isResearchLoading = data.competitorResearchLoading;
   
-  // Get suggested competitors - prioritize AI suggestions, fallback to category-based
-  const getSuggestedCompetitors = (): string[] => {
-    // If we have AI-suggested competitors, use those first
-    if (data.suggestedCompetitors && data.suggestedCompetitors.length > 0) {
-      return data.suggestedCompetitors;
-    }
-    
-    // Fallback to category-based suggestions
-    const competitors = new Set<string>();
-    
-    data.targetCategories.forEach(category => {
-      const categoryCompetitors = SUGGESTED_COMPETITORS[category] || [];
-      categoryCompetitors.forEach(c => competitors.add(c));
-    });
-
-    if (competitors.size === 0) {
-      SUGGESTED_COMPETITORS['default'].forEach(c => competitors.add(c));
-    }
-
-    return Array.from(competitors).sort();
-  };
-
-  const suggestedCompetitors = getSuggestedCompetitors();
-  const hasAISuggestions = data.suggestedCompetitors && data.suggestedCompetitors.length > 0;
+  // Get AI-suggested competitors
+  const suggestedCompetitors = data.suggestedCompetitors || [];
+  const hasAISuggestions = suggestedCompetitors.length > 0;
 
   const handleCompetitorToggle = (competitor: string) => {
     setSelectedCompetitors(prev => 
@@ -193,7 +155,7 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
               {isResearchLoading ? (
                 <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  Researching...
+                  Researching your market...
                 </span>
               ) : hasAISuggestions ? (
                 <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
@@ -203,16 +165,19 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
               ) : null}
             </div>
             
-            {isResearchLoading && suggestedCompetitors.length === 0 ? (
-              /* Loading state when no suggestions yet */
+            {isResearchLoading ? (
+              /* Loading skeleton while AI researches */
               <div className="space-y-2">
-                {[1, 2, 3, 4].map(i => (
+                {[1, 2, 3, 4, 5].map(i => (
                   <div key={i} className="w-full p-3 rounded-xl border border-gray-200 bg-gray-50 animate-pulse">
-                    <div className="h-5 w-32 bg-gray-200 rounded"></div>
+                    <div className="h-5 bg-gray-200 rounded" style={{ width: `${60 + Math.random() * 30}%` }}></div>
                   </div>
                 ))}
+                <p className="text-xs text-gray-500 mt-3 text-center">
+                  Or add your own competitors above while we research
+                </p>
               </div>
-            ) : (
+            ) : hasAISuggestions ? (
               <div className="space-y-2">
                 {suggestedCompetitors.map(competitor => (
                   <button
@@ -228,11 +193,18 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
                     <span className="font-medium text-gray-900">{competitor}</span>
                     {selectedCompetitors.includes(competitor) && (
                       <div className="w-5 h-5 rounded-full bg-gray-900 flex items-center justify-center">
-                        <Check className="w-3 h-3 text-white" />
+                        <Check className="w-3 h-3" />
                       </div>
                     )}
                   </button>
                 ))}
+              </div>
+            ) : (
+              /* No AI suggestions and not loading - show prompt to add manually */
+              <div className="p-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 text-center">
+                <p className="text-sm text-gray-600">
+                  Add your competitors using the input above
+                </p>
               </div>
             )}
           </div>
