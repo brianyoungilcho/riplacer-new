@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
 
@@ -8,19 +9,126 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Simple in-memory rate limiting by IP (resets on function cold start)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_REQUESTS_ANON = 5; // 5 requests per minute for anonymous
+const MAX_REQUESTS_AUTH = 30; // 30 requests per minute for authenticated
+
+function checkRateLimit(key: string, maxRequests: number): { allowed: boolean; remaining: number } {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+  
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, remaining: maxRequests - 1 };
+  }
+  
+  if (entry.count >= maxRequests) {
+    return { allowed: false, remaining: 0 };
+  }
+  
+  entry.count++;
+  return { allowed: true, remaining: maxRequests - entry.count };
+}
+
+// URL allowlist for SSRF protection - only allow fetching from legitimate business domains
+const BLOCKED_URL_PATTERNS = [
+  /^https?:\/\/localhost/i,
+  /^https?:\/\/127\./,
+  /^https?:\/\/10\./,
+  /^https?:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\./,
+  /^https?:\/\/192\.168\./,
+  /^https?:\/\/169\.254\./,
+  /^https?:\/\/\[::1\]/,
+  /^https?:\/\/\[fe80:/i,
+  /^https?:\/\/metadata\./i,
+  /^https?:\/\/.*\.internal/i,
+  /^file:/i,
+  /^ftp:/i,
+];
+
+function isUrlAllowed(url: string): boolean {
+  for (const pattern of BLOCKED_URL_PATTERNS) {
+    if (pattern.test(url)) {
+      return false;
+    }
+  }
+  // Must start with http:// or https://
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return false;
+  }
+  return true;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Get client IP for rate limiting
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
+                     req.headers.get('cf-connecting-ip') || 
+                     'unknown';
+    
+    // Check if user is authenticated
+    const authHeader = req.headers.get('Authorization');
+    let isAuthenticated = false;
+    let userId: string | null = null;
+    
+    if (authHeader) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const authClient = createClient(supabaseUrl, supabaseKey);
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user } } = await authClient.auth.getUser(token);
+      if (user) {
+        isAuthenticated = true;
+        userId = user.id;
+      }
+    }
+    
+    // Apply rate limiting (stricter for anonymous users)
+    const rateLimitKey = isAuthenticated ? `auth:${userId}` : `anon:${clientIp}`;
+    const maxRequests = isAuthenticated ? MAX_REQUESTS_AUTH : MAX_REQUESTS_ANON;
+    const { allowed, remaining } = checkRateLimit(rateLimitKey, maxRequests);
+    
+    if (!allowed) {
+      console.log(`Rate limit exceeded for ${rateLimitKey}`);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Rate limit exceeded. Please try again later.',
+          retryAfter: 60
+        }),
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json',
+            'X-RateLimit-Remaining': '0',
+            'Retry-After': '60'
+          } 
+        }
+      );
+    }
+
     const { website_url, product_description } = await req.json();
     
     if (!website_url && !product_description) {
       throw new Error('Website URL or product description is required');
     }
+    
+    // SSRF protection: validate URL before fetching
+    if (website_url && !isUrlAllowed(website_url)) {
+      console.log(`Blocked URL fetch attempt: ${website_url}`);
+      return new Response(
+        JSON.stringify({ error: 'Invalid URL. Please provide a public website URL.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    console.log('Analyzing company:', website_url || 'from description');
+    console.log(`Analyzing company (${isAuthenticated ? 'authenticated' : 'anonymous'}):`, website_url || 'from description');
 
     // Fetch the website content if URL provided
     let pageContent = '';

@@ -17,12 +17,81 @@ function createHash(input: string): string {
   return Math.abs(hash).toString(36);
 }
 
+// Simple in-memory rate limiting by IP (resets on function cold start)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_REQUESTS_ANON = 5; // 5 requests per minute for anonymous
+const MAX_REQUESTS_AUTH = 30; // 30 requests per minute for authenticated
+
+function checkRateLimit(key: string, maxRequests: number): { allowed: boolean; remaining: number } {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+  
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, remaining: maxRequests - 1 };
+  }
+  
+  if (entry.count >= maxRequests) {
+    return { allowed: false, remaining: 0 };
+  }
+  
+  entry.count++;
+  return { allowed: true, remaining: maxRequests - entry.count };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Get client IP for rate limiting
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
+                     req.headers.get('cf-connecting-ip') || 
+                     'unknown';
+    
+    // Check if user is authenticated
+    const authHeader = req.headers.get('Authorization');
+    let isAuthenticated = false;
+    let userId: string | null = null;
+    
+    if (authHeader) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const authClient = createClient(supabaseUrl, supabaseKey);
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user } } = await authClient.auth.getUser(token);
+      if (user) {
+        isAuthenticated = true;
+        userId = user.id;
+      }
+    }
+    
+    // Apply rate limiting (stricter for anonymous users)
+    const rateLimitKey = isAuthenticated ? `auth:${userId}` : `anon:${clientIp}`;
+    const maxRequests = isAuthenticated ? MAX_REQUESTS_AUTH : MAX_REQUESTS_ANON;
+    const { allowed, remaining } = checkRateLimit(rateLimitKey, maxRequests);
+    
+    if (!allowed) {
+      console.log(`Rate limit exceeded for ${rateLimitKey}`);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Rate limit exceeded. Please try again later.',
+          retryAfter: 60
+        }),
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json',
+            'X-RateLimit-Remaining': '0',
+            'Retry-After': '60'
+          } 
+        }
+      );
+    }
+    
     const { productDescription, companyDomain } = await req.json();
 
     if (!productDescription) {
@@ -31,6 +100,8 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    console.log(`Request from ${isAuthenticated ? 'authenticated user' : 'anonymous'} (${rateLimitKey}), remaining: ${remaining}`);
 
     // Create cache key
     const cacheKey = createHash(`${productDescription}|${companyDomain || ''}`);
