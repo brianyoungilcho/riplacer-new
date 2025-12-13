@@ -59,7 +59,7 @@ serve(async (req) => {
       );
     }
 
-    // Use Lovable AI Gateway for competitor research
+    // Use Lovable AI Gateway with Gemini 3 + Web Search Grounding
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY is not configured');
@@ -70,29 +70,38 @@ serve(async (req) => {
     // Determine if product description is generic (auto-generated) or specific (user-provided)
     const isGenericDescription = productDescription.toLowerCase().includes('products and services from');
     
-    const prompt = `A sales rep is selling the following product/solution:
+    // Clean company name from domain for exclusion
+    const companyName = companyDomain?.replace(/\.(com|io|net|org|co|ai|dev)$/i, '').replace(/^www\./, '') || '';
+    
+    const prompt = `You are researching CURRENT competitors in the market. Use web search to find the most up-to-date information.
+
+A sales rep is selling:
 "${productDescription}"
 ${companyDomain ? `They work for: ${companyDomain}` : ''}
 
 ${isGenericDescription 
-  ? `Since the product description is generic, research what ${companyDomain} actually sells and identify their direct competitors.`
-  : `Focus specifically on the product described above. Find competitors who sell SIMILAR products to the same type of buyers.`
+  ? `The product description is generic. Search the web to find what ${companyDomain} actually sells, then identify their direct competitors.`
+  : `Search the web for companies that sell SIMILAR products to "${productDescription}" targeting the same buyer personas.`
 }
 
 The sales rep wants to find prospects currently using COMPETING products so they can pitch switching.
 
-List 5-10 COMPETITOR COMPANIES whose products directly compete with what the rep is selling. These are vendors the sales rep wants to DISPLACE.
+RESEARCH INSTRUCTIONS:
+1. Search for current market data, not just your training knowledge
+2. Look for recent product launches, acquisitions, or market changes
+3. Focus on the SPECIFIC product/solution described, not entire company portfolios
+4. Find vendors that the sales rep would want to DISPLACE
 
 CRITICAL RULES:
-- Focus on the SPECIFIC product/solution described, not the entire company portfolio
-- Do NOT include "${companyDomain?.replace(/\.(com|io|net|org)$/i, '').replace(/^www\./, '') || 'the rep company'}" - that's the rep's own company
+- Do NOT include "${companyName}" or variations of it - that's the rep's own company
 - Only include companies selling similar/competing products to similar buyers
-- Rank from largest market presence to smallest
+- Prioritize companies with significant market presence
+- Include both established players and notable challengers
 
-Return ONLY a JSON array of competitor company names (biggest first), no explanation.
+Return ONLY a JSON array of 5-10 competitor company names, ordered from largest market presence to smallest.
 Example: ["Competitor A", "Competitor B", "Competitor C"]`;
 
-    console.log('Calling Lovable AI for competitor research...');
+    console.log('Calling Gemini 3 with Google Search grounding...');
     
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -101,11 +110,12 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'google/gemini-3-pro-preview',
         messages: [
-          { role: 'system', content: 'You are a B2B market research expert. Return only valid JSON arrays.' },
+          { role: 'system', content: 'You are a B2B market research expert with access to real-time web search. Use web search to find current, accurate competitor information. Return only valid JSON arrays.' },
           { role: 'user', content: prompt }
         ],
+        tools: [{ google_search: {} }], // Enable web search grounding
       }),
     });
 
@@ -116,7 +126,21 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
     }
 
     const data = await response.json();
+    console.log('Gemini 3 response received');
+    
     const content = data.choices[0]?.message?.content || '[]';
+    
+    // Extract grounding metadata if available
+    const groundingMetadata = data.choices[0]?.message?.groundingMetadata;
+    let sources: string[] = [];
+    
+    if (groundingMetadata?.groundingChunks) {
+      sources = groundingMetadata.groundingChunks
+        .filter((chunk: any) => chunk.web?.uri)
+        .map((chunk: any) => chunk.web.uri)
+        .slice(0, 10); // Keep top 10 sources
+      console.log(`Found ${sources.length} grounding sources`);
+    }
     
     // Parse the JSON array from the response
     let competitors: string[] = [];
@@ -125,13 +149,21 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
       const jsonMatch = content.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         competitors = JSON.parse(jsonMatch[0]);
+        // Filter out any variations of the user's company name
+        if (companyName) {
+          const lowerCompanyName = companyName.toLowerCase();
+          competitors = competitors.filter((c: string) => 
+            !c.toLowerCase().includes(lowerCompanyName) &&
+            !lowerCompanyName.includes(c.toLowerCase())
+          );
+        }
       }
     } catch (e) {
       console.error('Failed to parse competitors JSON:', content);
       competitors = [];
     }
 
-    // Cache the results
+    // Cache the results with sources
     if (competitors.length > 0) {
       await supabase
         .from('competitor_research_cache')
@@ -142,13 +174,16 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
         }, { onConflict: 'input_hash' });
     }
 
-    console.log(`Found ${competitors.length} competitors`);
+    console.log(`Found ${competitors.length} competitors with ${sources.length} sources`);
 
     return new Response(
       JSON.stringify({
         competitors,
-        confidence: competitors.length > 0 ? 0.85 : 0.3,
-        cached: false
+        sources, // Include sources in response for transparency
+        confidence: competitors.length > 0 ? 0.9 : 0.3,
+        cached: false,
+        model: 'gemini-3-pro-preview',
+        webSearchEnabled: true
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
