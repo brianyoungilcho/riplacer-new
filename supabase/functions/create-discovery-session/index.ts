@@ -16,12 +16,40 @@ function createHash(input: string): string {
   return Math.abs(hash).toString(36);
 }
 
+// Simple in-memory rate limiting by IP (resets on function cold start)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_SESSIONS_ANON = 3; // 3 sessions per minute for anonymous
+const MAX_SESSIONS_AUTH = 10; // 10 sessions per minute for authenticated
+
+function checkRateLimit(key: string, maxRequests: number): { allowed: boolean; remaining: number } {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+  
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, remaining: maxRequests - 1 };
+  }
+  
+  if (entry.count >= maxRequests) {
+    return { allowed: false, remaining: 0 };
+  }
+  
+  entry.count++;
+  return { allowed: true, remaining: maxRequests - entry.count };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Get client IP for rate limiting
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
+                     req.headers.get('cf-connecting-ip') || 
+                     'unknown';
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -35,6 +63,30 @@ serve(async (req) => {
       const { data: { user } } = await supabase.auth.getUser(token);
       userId = user?.id || null;
     }
+    
+    // Apply rate limiting (stricter for anonymous users)
+    const rateLimitKey = userId ? `auth:${userId}` : `anon:${clientIp}`;
+    const maxSessions = userId ? MAX_SESSIONS_AUTH : MAX_SESSIONS_ANON;
+    const { allowed, remaining } = checkRateLimit(rateLimitKey, maxSessions);
+    
+    if (!allowed) {
+      console.log(`Rate limit exceeded for session creation: ${rateLimitKey}`);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Rate limit exceeded. Please try again later.',
+          retryAfter: 60
+        }),
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json',
+            'X-RateLimit-Remaining': '0',
+            'Retry-After': '60'
+          } 
+        }
+      );
+    }
 
     const {
       productDescription,
@@ -44,7 +96,7 @@ serve(async (req) => {
       companyDomain,
     } = await req.json();
 
-    console.log('Creating discovery session for user:', userId || 'anonymous');
+    console.log('Creating discovery session for user:', userId || 'anonymous', `(${rateLimitKey}, remaining: ${remaining})`);
 
     // Build criteria object
     const criteria = {
