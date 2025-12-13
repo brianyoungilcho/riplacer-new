@@ -104,3 +104,5 @@
 - Shallow comparison can be refined if needed for more granular updates
 - All optimizations work independently and can be toggled if issues arise
 
+
+

@@ -131,15 +131,36 @@ export interface DiscoverySessionState {
 
 // Shallow comparison helper to prevent unnecessary state updates
 function isStateEqual(prev: DiscoverySessionState, next: DiscoverySessionState): boolean {
-  return (
-    prev.session?.id === next.session?.id &&
-    prev.advantageBriefStatus === next.advantageBriefStatus &&
-    prev.progress === next.progress &&
-    prev.prospects.length === next.prospects.length &&
-    prev.jobs.length === next.jobs.length &&
-    JSON.stringify(prev.prospects.map(p => ({ id: p.prospectId, status: p.dossierStatus }))) ===
-    JSON.stringify(next.prospects.map(p => ({ id: p.prospectId, status: p.dossierStatus })))
-  );
+  // Fast path - if basic properties differ, definitely not equal
+  if (
+    prev.session?.id !== next.session?.id ||
+    prev.advantageBriefStatus !== next.advantageBriefStatus ||
+    prev.progress !== next.progress ||
+    prev.prospects.length !== next.prospects.length ||
+    prev.jobs.length !== next.jobs.length
+  ) {
+    return false;
+  }
+
+  // Compare prospects including dossier status AND whether dossier has content
+  // This ensures we update when dossier data arrives (even if status doesn't change)
+  const prevProspectState = prev.prospects.map(p => ({
+    id: p.prospectId,
+    status: p.dossierStatus,
+    hasDossier: !!p.dossier,
+    dossierSummary: p.dossier?.summary?.slice(0, 50), // Include part of summary to detect changes
+    score: p.dossier?.score,
+  }));
+  
+  const nextProspectState = next.prospects.map(p => ({
+    id: p.prospectId,
+    status: p.dossierStatus,
+    hasDossier: !!p.dossier,
+    dossierSummary: p.dossier?.summary?.slice(0, 50),
+    score: p.dossier?.score,
+  }));
+
+  return JSON.stringify(prevProspectState) === JSON.stringify(nextProspectState);
 }
 
 export function useDiscoverySession() {

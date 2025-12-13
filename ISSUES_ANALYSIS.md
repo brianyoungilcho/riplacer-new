@@ -237,3 +237,5 @@ When page reloads, it creates a new discovery session instead of restoring the e
 - Existing functionality preserved
 - Only adds new capabilities
 
+
+

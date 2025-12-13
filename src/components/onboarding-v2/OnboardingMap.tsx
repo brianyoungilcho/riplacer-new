@@ -109,6 +109,10 @@ export function OnboardingMap({ data, step, prospects = [], selectedProspectId, 
   const [error, setError] = useState<string | null>(null);
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(3.5);
+  // Refs to prevent infinite zoom loops
+  const isFlyingRef = useRef(false);
+  const lastFlewToRef = useRef<string | null>(null);
+  const zoomUpdateTimeoutRef = useRef<number | null>(null);
 
   // Fetch Mapbox token from edge function
   useEffect(() => {
@@ -182,10 +186,18 @@ export function OnboardingMap({ data, step, prospects = [], selectedProspectId, 
       }
     });
 
-    // Track zoom level for dynamic marker sizing
+    // Track zoom level for dynamic marker sizing (reduced debounce for smoother feel)
     map.current.on('zoom', () => {
       if (map.current) {
-        setZoomLevel(map.current.getZoom());
+        // Reduced debounce from 100ms to 50ms for smoother updates
+        if (zoomUpdateTimeoutRef.current) {
+          clearTimeout(zoomUpdateTimeoutRef.current);
+        }
+        zoomUpdateTimeoutRef.current = window.setTimeout(() => {
+          if (map.current) {
+            setZoomLevel(map.current.getZoom());
+          }
+        }, 50); // 50ms debounce for better responsiveness
       }
     });
 
@@ -305,40 +317,124 @@ export function OnboardingMap({ data, step, prospects = [], selectedProspectId, 
     return 1.1;                     // Zoomed in - slightly larger
   }, []);
 
-  const createMarkerElement = useCallback((prospect: MapProspect, isSelected: boolean, zoom: number) => {
-    const el = document.createElement('div');
-    el.className = 'prospect-marker';
-    
+  // Helper to create marker HTML (for both creation and updates)
+  const getMarkerHTML = useCallback((prospect: MapProspect, isSelected: boolean, zoom: number) => {
     const scale = getMarkerScale(zoom);
     const selectedStyles = isSelected 
       ? 'ring-2 ring-red-500 ring-offset-2 scale-110' 
       : 'hover:scale-105';
     
-    // At very low zoom, show only score badge (like Airbnb's clustered view)
-    const showName = zoom >= 6;
+    const score = prospect.score || 0;
     
-    el.innerHTML = showName ? `
-      <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full shadow-lg cursor-pointer transition-all duration-200 ${selectedStyles} bg-white border border-gray-200" style="transform: scale(${scale}); transform-origin: bottom center;">
-        <span class="text-xs font-semibold text-gray-900 whitespace-nowrap max-w-[100px] truncate">${prospect.name}</span>
-        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold">${prospect.score}</span>
-      </div>
-    ` : `
-      <div class="flex items-center justify-center w-8 h-8 rounded-full shadow-lg cursor-pointer transition-all duration-200 ${selectedStyles} bg-red-500 text-white border-2 border-white" style="transform: scale(${scale}); transform-origin: center;">
-        <span class="text-xs font-bold">${prospect.score}</span>
-      </div>
-    `;
+    // Show pill with name + score when zoomed in enough (zoom >= 10)
+    // Show circle with score only when zoomed out
+    const showName = zoom >= 10;
+    
+    if (showName) {
+      // Elongated pill with name and score
+      return `
+        <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full shadow-lg cursor-pointer transition-all duration-200 ${selectedStyles} bg-white border border-gray-200" style="transform: scale(${scale}); transform-origin: bottom center;">
+          <span class="text-xs font-semibold text-gray-900 whitespace-nowrap max-w-[120px] truncate">${prospect.name}</span>
+          <span class="flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold flex-shrink-0">${score}</span>
+        </div>
+      `;
+    } else {
+      // Small circle with score only
+      return `
+        <div class="flex items-center justify-center w-10 h-10 rounded-full shadow-lg cursor-pointer transition-all duration-200 ${selectedStyles} bg-red-500 text-white border-2 border-white" style="transform: scale(${scale}); transform-origin: center;">
+          <span class="text-sm font-bold">${score}</span>
+        </div>
+      `;
+    }
+  }, [getMarkerScale]);
+
+  const createMarkerElement = useCallback((prospect: MapProspect, isSelected: boolean, zoom: number) => {
+    const el = document.createElement('div');
+    el.className = 'prospect-marker';
+    
+    el.innerHTML = getMarkerHTML(prospect, isSelected, zoom);
     
     el.style.cursor = 'pointer';
     el.style.zIndex = isSelected ? '1000' : '1';
+    
+    // Attach click handler to parent element so it persists through innerHTML updates
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       onProspectClick?.(prospect.id);
     });
     
     return el;
-  }, [onProspectClick, getMarkerScale]);
+  }, [onProspectClick, getMarkerHTML]);
 
-  // Update prospect markers when prospects or zoom changes
+  // Get anchor point based on zoom level
+  const getMarkerAnchor = useCallback((zoom: number) => {
+    return zoom >= 10 ? 'bottom' : 'center'; // Bottom anchor for pills, center for circles
+  }, []);
+
+  // Track previous zoom level to detect threshold crossings
+  const prevZoomLevelRef = useRef<number>(zoomLevel);
+  
+  // Update marker appearance when zoom or selection changes
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+    
+    const prevZoom = prevZoomLevelRef.current;
+    const currentZoom = zoomLevel;
+    const crossesThreshold = (prevZoom < 10 && currentZoom >= 10) || (prevZoom >= 10 && currentZoom < 10);
+    
+    // If crossing zoom threshold (10), recreate markers to update anchor
+    if (crossesThreshold) {
+      markersRef.current.forEach((marker, id) => {
+        const prospect = prospects.find(p => p.id === id);
+        if (!prospect || !prospect.lat || !prospect.lng) return;
+        
+        try {
+          marker.remove();
+          const isSelected = id === selectedProspectId;
+          const el = createMarkerElement(prospect, isSelected, currentZoom);
+          const anchor = getMarkerAnchor(currentZoom);
+          const newMarker = new mapboxgl.Marker({ element: el, anchor })
+            .setLngLat([prospect.lng, prospect.lat])
+            .addTo(map.current!);
+          markersRef.current.set(id, newMarker);
+          
+          // Click handler is already attached in createMarkerElement - no need to re-attach
+        } catch (error) {
+          console.warn('Error recreating marker:', id, error);
+        }
+      });
+      prevZoomLevelRef.current = currentZoom;
+      return;
+    }
+    
+    // Otherwise, just update HTML content (smooth update)
+    // Note: Click handlers are attached to the parent element (el) in createMarkerElement,
+    // so they persist through innerHTML updates - no need to re-attach them.
+    markersRef.current.forEach((marker, id) => {
+      try {
+        const prospect = prospects.find(p => p.id === id);
+        if (!prospect) return;
+        
+        const el = marker.getElement();
+        if (el) {
+          const isSelected = id === selectedProspectId;
+          const newHTML = getMarkerHTML(prospect, isSelected, currentZoom);
+          
+          // Update HTML content - click handler on parent element persists
+          el.innerHTML = newHTML;
+          
+          // Update z-index for selection
+          el.style.zIndex = isSelected ? '1000' : '1';
+        }
+      } catch (error) {
+        console.warn('Error updating marker:', id, error);
+      }
+    });
+    
+    prevZoomLevelRef.current = currentZoom;
+  }, [zoomLevel, selectedProspectId, prospects, mapLoaded, getMarkerHTML, getMarkerAnchor, createMarkerElement, onProspectClick]);
+
+  // Add/remove markers when prospects list changes (separate from zoom updates)
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
     
@@ -351,26 +447,26 @@ export function OnboardingMap({ data, step, prospects = [], selectedProspectId, 
       }
     });
     
-    // Add or update markers for each prospect
+    // Add new markers for prospects that don't have markers yet
     prospects.forEach(prospect => {
       if (!prospect.lat || !prospect.lng) return;
       
-      const isSelected = prospect.id === selectedProspectId;
-      const existingMarker = markersRef.current.get(prospect.id);
-      
-      // Always recreate marker to reflect current zoom level and selection state
-      if (existingMarker) {
-        existingMarker.remove();
+      // Only create marker if it doesn't exist
+      if (!markersRef.current.has(prospect.id)) {
+        try {
+          const isSelected = prospect.id === selectedProspectId;
+          const el = createMarkerElement(prospect, isSelected, zoomLevel);
+          const anchor = getMarkerAnchor(zoomLevel);
+          const marker = new mapboxgl.Marker({ element: el, anchor })
+            .setLngLat([prospect.lng, prospect.lat])
+            .addTo(map.current!);
+          markersRef.current.set(prospect.id, marker);
+        } catch (error) {
+          console.warn('Error creating marker for prospect:', prospect.id, error);
+        }
       }
-      
-      const el = createMarkerElement(prospect, isSelected, zoomLevel);
-      const anchor = zoomLevel >= 6 ? 'bottom' : 'center'; // Center anchor for score-only dots
-      const marker = new mapboxgl.Marker({ element: el, anchor })
-        .setLngLat([prospect.lng, prospect.lat])
-        .addTo(map.current!);
-      markersRef.current.set(prospect.id, marker);
     });
-  }, [prospects, selectedProspectId, mapLoaded, zoomLevel, createMarkerElement]);
+  }, [prospects, mapLoaded, createMarkerElement, zoomLevel, selectedProspectId, getMarkerAnchor]);
 
   // Initial fit bounds when prospects first load
   const hasFittedBounds = useRef(false);
@@ -397,25 +493,67 @@ export function OnboardingMap({ data, step, prospects = [], selectedProspectId, 
     }
   }, [prospects, mapLoaded, step]);
 
-  // Center map on selected prospect
+  // Center map on selected prospect (with guards to prevent infinite loops)
   useEffect(() => {
-    if (!map.current || !mapLoaded || !selectedProspectId) return;
+    if (!map.current || !mapLoaded || !selectedProspectId) {
+      // Reset flags when no selection
+      isFlyingRef.current = false;
+      lastFlewToRef.current = null;
+      return;
+    }
+    
+    // Prevent infinite loops - don't fly if already flying or already at this location
+    if (isFlyingRef.current || lastFlewToRef.current === selectedProspectId) {
+      return;
+    }
     
     const selectedProspect = prospects.find(p => p.id === selectedProspectId);
-    if (selectedProspect?.lat && selectedProspect?.lng) {
-      map.current.flyTo({
-        center: [selectedProspect.lng, selectedProspect.lat],
-        zoom: Math.max(map.current.getZoom(), 8), // Zoom in if needed
-        duration: 800
-      });
+    if (!selectedProspect?.lat || !selectedProspect?.lng) return;
+    
+    // Check if already at this location (within small threshold)
+    const currentCenter = map.current.getCenter();
+    const distance = Math.sqrt(
+      Math.pow(currentCenter.lng - selectedProspect.lng, 2) +
+      Math.pow(currentCenter.lat - selectedProspect.lat, 2)
+    );
+    
+    // Only fly if more than 0.01 degrees away (approximately 1km)
+    if (distance < 0.01) {
+      lastFlewToRef.current = selectedProspectId;
+      return;
     }
+    
+    // Set flags before flying
+    isFlyingRef.current = true;
+    lastFlewToRef.current = selectedProspectId;
+    
+    const currentZoom = map.current.getZoom();
+    // Zoom in to at least level 10 (where pills appear) when selecting a prospect
+    const targetZoom = Math.max(currentZoom, 10);
+    
+    map.current.flyTo({
+      center: [selectedProspect.lng, selectedProspect.lat],
+      zoom: targetZoom,
+      duration: 800
+    });
+    
+    // Reset flying flag after animation completes
+    setTimeout(() => {
+      isFlyingRef.current = false;
+    }, 900); // Slightly longer than duration to ensure completion
   }, [selectedProspectId, prospects, mapLoaded]);
 
-  // Cleanup markers on unmount
+  // Cleanup markers and timeouts on unmount
   useEffect(() => {
     return () => {
       markersRef.current.forEach(marker => marker.remove());
       markersRef.current.clear();
+      if (zoomUpdateTimeoutRef.current) {
+        clearTimeout(zoomUpdateTimeoutRef.current);
+      }
+      // Reset flying flags on cleanup
+      isFlyingRef.current = false;
+      lastFlewToRef.current = null;
     };
   }, []);
 

@@ -248,7 +248,7 @@
     animation: float 6s ease-in-out infinite;
   }
 
-  /* Skeleton shimmer effect */
+  /* Skeleton shimmer effect - Industry-leading (Facebook/LinkedIn style) */
   .skeleton-shimmer {
     position: relative;
     overflow: hidden;
@@ -258,17 +258,20 @@
     content: '';
     position: absolute;
     top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255, 255, 255, 0.5) 50%,
+      rgba(255, 255, 255, 0.4) 20%,
+      rgba(255, 255, 255, 0.7) 50%,
+      rgba(255, 255, 255, 0.4) 80%,
       transparent 100%
     );
-    animation: shimmer 2s ease-in-out infinite;
+    animation: shimmer 1.5s ease-in-out infinite;
     pointer-events: none;
+    z-index: 1;
   }
 
   /* Subtle dotted background with gentle float (used on /start) */
@@ -299,10 +302,10 @@
 
 @keyframes shimmer {
   0% {
-    transform: translateX(-100%);
+    left: -100%;
   }
   100% {
-    transform: translateX(100%);
+    left: 100%;
   }
 }
 

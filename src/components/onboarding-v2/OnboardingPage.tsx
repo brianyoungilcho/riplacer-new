@@ -629,7 +629,7 @@ export function OnboardingPage() {
                     const mapped = prospects.map(p => ({
                       id: p.prospectId,
                       name: p.name,
-                      score: p.score || 0,
+                      score: p.dossier?.score || p.score || p.initialScore || 0, // Fallback chain for score
                       lat: p.lat,
                       lng: p.lng,
                     }));

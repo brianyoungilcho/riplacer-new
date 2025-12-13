@@ -273,7 +273,7 @@ export function DiscoveryV2Tab({
     );
   }
 
-  // Skeleton loader component
+  // Skeleton loader component with industry-leading shimmer animation
   const SkeletonCard = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <div className="flex items-start gap-3">
@@ -474,6 +474,12 @@ export function DiscoveryV2Tab({
               {[1, 2, 3].map((i) => (
                 <SkeletonCard key={i} />
               ))}
+              {/* Subtle loading message */}
+              <div className="text-center pt-4 pb-2">
+                <p className="text-sm text-gray-400">
+                  Researching prospects... This may take a moment
+                </p>
+              </div>
             </div>
           ) : visibleProspects.length > 0 ? (
             <>
