@@ -59,10 +59,10 @@ serve(async (req) => {
       );
     }
 
-    // Use Lovable AI Gateway with Gemini 3 + Web Search Grounding
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
+    // Use direct Google Gemini API with Google Search grounding
+    const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
+    if (!GOOGLE_GEMINI_API_KEY) {
+      throw new Error('GOOGLE_GEMINI_API_KEY is not configured');
     }
 
     console.log('Input:', { productDescription, companyDomain });
@@ -73,7 +73,7 @@ serve(async (req) => {
     // Clean company name from domain for exclusion
     const companyName = companyDomain?.replace(/\.(com|io|net|org|co|ai|dev)$/i, '').replace(/^www\./, '') || '';
     
-    const prompt = `You are researching CURRENT competitors in the market. Use web search to find the most up-to-date information.
+    const prompt = `You are researching CURRENT competitors in the market. Use Google Search to find the most up-to-date information.
 
 A sales rep is selling:
 "${productDescription}"
@@ -101,46 +101,67 @@ CRITICAL RULES:
 Return ONLY a JSON array of 5-10 competitor company names, ordered from largest market presence to smallest.
 Example: ["Competitor A", "Competitor B", "Competitor C"]`;
 
-    console.log('Calling Gemini 3 Pro Preview...');
+    console.log('Calling Gemini 2.5 Flash with Google Search grounding...');
     
-    // Note: Lovable AI gateway uses standard OpenAI-compatible format
-    // Web search grounding is handled by the model's training knowledge
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-3-pro-preview',
-        messages: [
-          { role: 'system', content: 'You are a B2B market research expert. Use your knowledge to identify current competitors in the market. Return only valid JSON arrays.' },
-          { role: 'user', content: prompt }
-        ],
-      }),
-    });
+    // Call Gemini API directly with google_search_retrieval tool
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GOOGLE_GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: prompt }]
+            }
+          ],
+          tools: [
+            {
+              google_search_retrieval: {
+                dynamic_retrieval_config: {
+                  mode: 'MODE_DYNAMIC',
+                  dynamic_threshold: 0.3
+                }
+              }
+            }
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 1024,
+          }
+        }),
+      }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('AI gateway error:', response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+      console.error('Gemini API error:', response.status, errorText);
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    console.log('Gemini 3 response received');
+    console.log('Gemini 2.5 Flash response received');
     
-    const content = data.choices[0]?.message?.content || '[]';
+    // Extract content from Gemini response format
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
     
     // Extract grounding metadata if available
-    const groundingMetadata = data.choices[0]?.message?.groundingMetadata;
+    const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
     let sources: string[] = [];
     
     if (groundingMetadata?.groundingChunks) {
       sources = groundingMetadata.groundingChunks
         .filter((chunk: any) => chunk.web?.uri)
         .map((chunk: any) => chunk.web.uri)
-        .slice(0, 10); // Keep top 10 sources
-      console.log(`Found ${sources.length} grounding sources`);
+        .slice(0, 10);
+      console.log(`Found ${sources.length} grounding sources from Google Search`);
+    }
+    
+    if (groundingMetadata?.webSearchQueries) {
+      console.log('Search queries used:', groundingMetadata.webSearchQueries);
     }
     
     // Parse the JSON array from the response
@@ -175,16 +196,17 @@ Example: ["Competitor A", "Competitor B", "Competitor C"]`;
         }, { onConflict: 'input_hash' });
     }
 
-    console.log(`Found ${competitors.length} competitors with ${sources.length} sources`);
+    console.log(`Found ${competitors.length} competitors with ${sources.length} grounding sources`);
 
     return new Response(
       JSON.stringify({
         competitors,
-        sources, // Include sources in response for transparency
+        sources,
         confidence: competitors.length > 0 ? 0.9 : 0.3,
         cached: false,
-        model: 'gemini-3-pro-preview',
-        webSearchEnabled: true
+        model: 'gemini-2.5-flash-preview-05-20',
+        webSearchEnabled: true,
+        searchQueries: groundingMetadata?.webSearchQueries || []
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
