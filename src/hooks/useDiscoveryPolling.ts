@@ -16,6 +16,11 @@ interface UseDiscoveryPollingOptions {
    * If provided, this will be called instead of fetching via supabase.functions.invoke.
    */
   fetchSession?: (sessionId: string, processNextJob?: boolean) => Promise<any>;
+  /**
+   * Enable realtime subscriptions for more responsive updates.
+   * Falls back to polling if realtime is not available.
+   */
+  useRealtime?: boolean;
 }
 
 // Adaptive polling intervals based on activity state
@@ -24,14 +29,19 @@ const POLLING_INTERVALS = {
   EARLY: 5000,       // 5s in early stage (< 50% progress)
   LATE: 10000,       // 10s when mostly complete (50-99%)
   BACKGROUND: 30000, // 30s when tab is hidden
+  REALTIME: 15000,   // 15s when using realtime (as fallback/refresh)
 } as const;
 
 // Calculate optimal polling interval based on current state
 function getAdaptiveInterval(
   progress: number,
   hasRunningJobs: boolean,
-  isTabVisible: boolean
+  isTabVisible: boolean,
+  useRealtime: boolean
 ): number {
+  // When using realtime, poll less frequently (just for sync/refresh)
+  if (useRealtime && isTabVisible) return POLLING_INTERVALS.REALTIME;
+  
   // When tab is hidden, poll very slowly to save resources
   if (!isTabVisible) return POLLING_INTERVALS.BACKGROUND;
   
@@ -49,12 +59,14 @@ export function useDiscoveryPolling({
   onUpdate,
   onComplete,
   fetchSession,
+  useRealtime = false,
 }: UseDiscoveryPollingOptions) {
   const [isPolling, setIsPolling] = useState(false);
   const [pollCount, setPollCount] = useState(0);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isCompleteRef = useRef(false);
   const isTabVisibleRef = useRef(true);
+  const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastStateRef = useRef<{ progress: number; hasRunningJobs: boolean }>({
     progress: 0,
     hasRunningJobs: true,
@@ -83,7 +95,7 @@ export function useDiscoveryPolling({
   const scheduleNextPoll = useCallback((progress: number, hasRunningJobs: boolean) => {
     if (isCompleteRef.current) return;
     
-    const interval = getAdaptiveInterval(progress, hasRunningJobs, isTabVisibleRef.current);
+    const interval = getAdaptiveInterval(progress, hasRunningJobs, isTabVisibleRef.current, useRealtime);
     
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -92,7 +104,7 @@ export function useDiscoveryPolling({
     timeoutRef.current = setTimeout(() => {
       poll();
     }, interval);
-  }, []);
+  }, [useRealtime]);
 
   const poll = useCallback(async () => {
     if (!sessionId || isCompleteRef.current) return;
@@ -163,6 +175,12 @@ export function useDiscoveryPolling({
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
+        
+        // Cleanup realtime channel
+        if (realtimeChannelRef.current) {
+          supabase.removeChannel(realtimeChannelRef.current);
+          realtimeChannelRef.current = null;
+        }
       } else {
         // Schedule next poll with adaptive interval
         scheduleNextPoll(state.progress, hasRunningJobs);
@@ -173,6 +191,55 @@ export function useDiscoveryPolling({
       scheduleNextPoll(lastStateRef.current.progress, false);
     }
   }, [sessionId, scheduleNextPoll, fetchSession]);
+
+  // Setup realtime subscription for faster updates
+  useEffect(() => {
+    if (!useRealtime || !sessionId || !enabled) return;
+
+    console.log('[Realtime] Setting up subscription for session:', sessionId);
+
+    const channel = supabase
+      .channel(`discovery-${sessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'prospect_dossiers',
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log('[Realtime] Dossier updated:', payload.new);
+          // Trigger immediate poll to refresh state
+          poll();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'research_jobs',
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log('[Realtime] Job updated:', payload.new);
+          // Trigger immediate poll to refresh state
+          poll();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Realtime] Subscription status:', status);
+      });
+
+    realtimeChannelRef.current = channel;
+
+    return () => {
+      console.log('[Realtime] Cleaning up subscription');
+      supabase.removeChannel(channel);
+      realtimeChannelRef.current = null;
+    };
+  }, [useRealtime, sessionId, enabled, poll]);
 
   // Start polling when enabled and sessionId is set
   useEffect(() => {
@@ -207,6 +274,10 @@ export function useDiscoveryPolling({
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
+    }
+    if (realtimeChannelRef.current) {
+      supabase.removeChannel(realtimeChannelRef.current);
+      realtimeChannelRef.current = null;
     }
   }, []);
 

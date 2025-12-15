@@ -36,12 +36,40 @@ serve(async (req) => {
 
     console.log('Getting discovery session:', sessionId, 'user:', userId || 'anonymous');
 
-    // Get session
-    const { data: session, error: sessionError } = await supabase
-      .from('discovery_sessions')
-      .select('id, user_id, status, criteria, created_at, updated_at')
-      .eq('id', sessionId)
-      .single();
+    // OPTIMIZATION: Fetch all data in parallel instead of sequentially
+    const [sessionResult, briefResult, dossiersResult, jobsResult] = await Promise.all([
+      // Get session
+      supabase
+        .from('discovery_sessions')
+        .select('id, user_id, status, criteria, created_at, updated_at')
+        .eq('id', sessionId)
+        .single(),
+      
+      // Get advantage brief
+      supabase
+        .from('advantage_briefs')
+        .select('brief, status')
+        .eq('session_id', sessionId)
+        .maybeSingle(),
+      
+      // Get prospects/dossiers
+      supabase
+        .from('prospect_dossiers')
+        .select('prospect_key, prospect_name, prospect_state, prospect_lat, prospect_lng, dossier, status, last_updated')
+        .eq('session_id', sessionId),
+      
+      // Get jobs
+      supabase
+        .from('research_jobs')
+        .select('id, job_type, prospect_key, status, progress, error, created_at, started_at')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true }),
+    ]);
+
+    const { data: session, error: sessionError } = sessionResult;
+    const { data: brief } = briefResult;
+    const { data: dossiers } = dossiersResult;
+    const { data: jobs } = jobsResult;
 
     if (sessionError || !session) {
       return new Response(
@@ -58,27 +86,10 @@ serve(async (req) => {
       );
     }
 
-    // Get advantage brief
-    const { data: brief } = await supabase
-      .from('advantage_briefs')
-      .select('brief, status')
-      .eq('session_id', sessionId)
-      .maybeSingle();
+    // Track jobs that need updating (batch updates at end)
+    const jobUpdates: { ids: string[]; update: Record<string, any> }[] = [];
 
-    // Get prospects/dossiers
-    const { data: dossiers } = await supabase
-      .from('prospect_dossiers')
-      .select('prospect_key, prospect_name, prospect_state, prospect_lat, prospect_lng, dossier, status, last_updated')
-      .eq('session_id', sessionId);
-
-    // Get jobs
-    const { data: jobs } = await supabase
-      .from('research_jobs')
-      .select('id, job_type, prospect_key, status, progress, error, created_at, started_at')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true });
-
-    // === FIX #3: Reset stuck jobs (running for more than 2 minutes) ===
+    // Reset stuck jobs (running for more than 2 minutes)
     const twoMinutesAgo = new Date(Date.now() - JOB_TIMEOUT_MS).toISOString();
     const stuckJobs = jobs?.filter(j => 
       j.status === 'running' && 
@@ -89,15 +100,14 @@ serve(async (req) => {
     if (stuckJobs.length > 0) {
       console.log(`Resetting ${stuckJobs.length} stuck jobs:`, stuckJobs.map(j => j.id));
       
-      const stuckJobIds = stuckJobs.map(j => j.id);
-      await supabase
-        .from('research_jobs')
-        .update({ 
+      jobUpdates.push({
+        ids: stuckJobs.map(j => j.id),
+        update: { 
           status: 'queued', 
           started_at: null, 
           error: 'Timeout - automatically retrying' 
-        })
-        .in('id', stuckJobIds);
+        }
+      });
 
       // Update local jobs array to reflect the change
       stuckJobs.forEach(stuckJob => {
@@ -109,7 +119,7 @@ serve(async (req) => {
       });
     }
 
-    // === FIX #1: Process multiple queued jobs in parallel ===
+    // Process multiple queued jobs in parallel
     if (processNextJob) {
       const queuedJobs = jobs?.filter(j => j.status === 'queued') || [];
       const jobsToProcess = queuedJobs.slice(0, MAX_PARALLEL_JOBS);
@@ -117,15 +127,14 @@ serve(async (req) => {
       if (jobsToProcess.length > 0) {
         console.log(`Processing ${jobsToProcess.length} queued jobs in parallel:`, jobsToProcess.map(j => j.id));
         
-        // Mark all jobs as running first
+        // OPTIMIZATION: Batch mark all jobs as running in single query
         const jobIds = jobsToProcess.map(j => j.id);
-        await supabase
-          .from('research_jobs')
-          .update({ status: 'running', started_at: new Date().toISOString() })
-          .in('id', jobIds);
+        jobUpdates.push({
+          ids: jobIds,
+          update: { status: 'running', started_at: new Date().toISOString() }
+        });
 
-        // === FIX #2: Better error handling with fire-and-forget ===
-        // Fire off all dossier research requests in parallel
+        // Fire off all dossier research requests in parallel (don't await)
         const dossierPromises = jobsToProcess
           .filter(job => job.job_type === 'dossier' && job.prospect_key)
           .map(async (queuedJob) => {
@@ -133,21 +142,21 @@ serve(async (req) => {
             if (!prospect) {
               console.error(`Prospect not found for job ${queuedJob.id}:`, queuedJob.prospect_key);
               // Mark job as failed if prospect doesn't exist
-              await supabase
-                .from('research_jobs')
-                .update({ 
+              jobUpdates.push({
+                ids: [queuedJob.id],
+                update: { 
                   status: 'failed', 
                   error: 'Prospect not found',
                   finished_at: new Date().toISOString()
-                })
-                .eq('id', queuedJob.id);
+                }
+              });
               return;
             }
 
             const dossierUrl = `${supabaseUrl}/functions/v1/research-prospect-dossier`;
             
             try {
-              // Fire and forget - but log errors
+              // Fire and forget
               fetch(dossierUrl, {
                 method: 'POST',
                 headers: {
@@ -164,24 +173,33 @@ serve(async (req) => {
                   },
                   jobId: queuedJob.id,
                 }),
-              }).catch(async (e) => {
+              }).catch((e) => {
                 console.error(`Background dossier fetch failed for job ${queuedJob.id}:`, e);
-                // Don't mark as failed here - the timeout cleanup will handle truly stuck jobs
               });
             } catch (e) {
               console.error(`Error starting dossier research for job ${queuedJob.id}:`, e);
             }
           });
 
-        // Wait for all fire-and-forget calls to be initiated (not completed)
+        // Wait for all fire-and-forget calls to be initiated
         await Promise.all(dossierPromises);
       }
     }
 
+    // OPTIMIZATION: Execute all job updates in parallel
+    if (jobUpdates.length > 0) {
+      await Promise.all(
+        jobUpdates.map(({ ids, update }) =>
+          supabase
+            .from('research_jobs')
+            .update(update)
+            .in('id', ids)
+        )
+      );
+    }
+
     // Format response
     const prospects = (dossiers || []).map(d => {
-      // Return dossier data if it exists and status is not 'failed'
-      // This allows showing partial data even when research is still in progress
       const shouldIncludeDossier = d.dossier && d.status !== 'failed';
       
       return {

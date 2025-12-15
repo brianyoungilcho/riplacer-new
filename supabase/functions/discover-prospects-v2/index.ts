@@ -67,7 +67,7 @@ function randomOffset(scale: number = 0.5): number {
   return (Math.random() - 0.5) * scale;
 }
 
-// Geocode prospect using Mapbox API
+// Geocode prospect using Mapbox API with retry
 async function geocodeProspect(
   name: string,
   city: string | undefined,
@@ -76,13 +76,9 @@ async function geocodeProspect(
   const MAPBOX_TOKEN = Deno.env.get('MAPBOX_ACCESS_TOKEN');
   
   if (!MAPBOX_TOKEN) {
-    console.log('MAPBOX_ACCESS_TOKEN not configured, skipping geocoding');
     return null;
   }
 
-  const stateCenter = STATE_CENTERS[state] || { lat: 39.8283, lng: -98.5795 };
-
-  // Try geocoding with organization name + city + state
   const queries = [];
   if (city) {
     queries.push(`${name}, ${city}, ${state}, USA`);
@@ -98,10 +94,7 @@ async function geocodeProspect(
       
       const response = await fetch(url);
       
-      if (!response.ok) {
-        console.log(`Geocoding request failed for "${query}": ${response.status}`);
-        continue;
-      }
+      if (!response.ok) continue;
 
       const data = await response.json();
       
@@ -115,14 +108,41 @@ async function geocodeProspect(
     }
   }
 
-  // Fallback: use state center with small offset
-  console.log(`Geocoding failed for "${name}", using state center for ${state}`);
-  return {
-    lat: stateCenter.lat + randomOffset(0.3),
-    lng: stateCenter.lng + randomOffset(0.3),
-  };
+  return null;
 }
 
+// OPTIMIZATION: Batch geocode with concurrency limit
+async function batchGeocode(
+  prospects: Array<{ name: string; city?: string; state: string }>,
+  concurrency: number = 3
+): Promise<Map<string, { lat: number; lng: number }>> {
+  const results = new Map<string, { lat: number; lng: number }>();
+  
+  // Process in batches to respect rate limits
+  for (let i = 0; i < prospects.length; i += concurrency) {
+    const batch = prospects.slice(i, i + concurrency);
+    const promises = batch.map(async (p) => {
+      const key = createProspectKey(p.name, p.state);
+      const stateCenter = STATE_CENTERS[p.state] || { lat: 39.8283, lng: -98.5795 };
+      
+      const geocoded = await geocodeProspect(p.name, p.city, p.state);
+      
+      if (geocoded) {
+        results.set(key, geocoded);
+      } else {
+        // Fallback to state center with offset
+        results.set(key, {
+          lat: stateCenter.lat + randomOffset(p.city ? 0.3 : 1.0),
+          lng: stateCenter.lng + randomOffset(p.city ? 0.3 : 1.5),
+        });
+      }
+    });
+    
+    await Promise.all(promises);
+  }
+  
+  return results;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -284,91 +304,64 @@ Return ONLY a valid JSON array. No explanation text.`;
     }
 
     // Filter to only valid states
-    aiProspects = aiProspects.filter(p => states.includes(p.state));
+    aiProspects = aiProspects.filter(p => states.includes(p.state)).slice(0, limit);
 
-    // Create prospect dossiers and jobs
-    const prospects: any[] = [];
-    const jobs: any[] = [];
+    // OPTIMIZATION #1: Batch geocode all prospects in parallel (with concurrency limit)
+    const geocodeResults = await batchGeocode(
+      aiProspects.map(p => ({ name: p.name, city: p.city, state: p.state })),
+      3 // Process 3 at a time to respect Mapbox rate limits
+    );
 
-    for (const p of aiProspects.slice(0, limit)) {
+    // OPTIMIZATION #2: Prepare all dossiers and jobs for batch insert
+    const dossierRecords = aiProspects.map(p => {
       const prospectKey = createProspectKey(p.name, p.state);
-      const stateCenter = STATE_CENTERS[p.state] || { lat: 39.8283, lng: -98.5795 };
+      const coords = geocodeResults.get(prospectKey) || { 
+        lat: STATE_CENTERS[p.state]?.lat || 39.8283, 
+        lng: STATE_CENTERS[p.state]?.lng || -98.5795 
+      };
       
-      // Geocode prospect location for accurate positioning
-      let coordinates = { lat: stateCenter.lat, lng: stateCenter.lng };
-      if (p.city && p.name) {
-        const geocoded = await geocodeProspect(p.name, p.city, p.state);
-        if (geocoded) {
-          coordinates = geocoded;
-        } else {
-          // Fallback to state center with small random offset if geocoding fails
-          coordinates = {
-            lat: stateCenter.lat + randomOffset(0.3),
-            lng: stateCenter.lng + randomOffset(0.3),
-          };
-        }
-      } else {
-        // If no city provided, use state center with random offset
-        coordinates = {
-          lat: stateCenter.lat + randomOffset(1.0),
-          lng: stateCenter.lng + randomOffset(1.5),
-        };
-      }
-      
-      // Create dossier record (queued for research)
-      const { error: dossierError } = await supabase
-        .from('prospect_dossiers')
-        .upsert({
-          session_id: sessionId,
-          prospect_key: prospectKey,
-          prospect_name: p.name,
-          prospect_state: p.state,
-          prospect_lat: coordinates.lat,
-          prospect_lng: coordinates.lng,
-          dossier: {
-            score: p.score || 75,
-            anglesForList: p.angles || ['Potential opportunity'],
-            summary: p.reasoning || 'Pending deep research',
-          },
-          status: 'queued',
-        }, { onConflict: 'session_id,prospect_key' });
+      return {
+        session_id: sessionId,
+        prospect_key: prospectKey,
+        prospect_name: p.name,
+        prospect_state: p.state,
+        prospect_lat: coords.lat,
+        prospect_lng: coords.lng,
+        dossier: {
+          score: p.score || 75,
+          anglesForList: p.angles || ['Potential opportunity'],
+          summary: p.reasoning || 'Pending deep research',
+        },
+        status: 'queued',
+      };
+    });
 
-      if (dossierError) {
-        console.error('Failed to create dossier:', dossierError);
-        continue;
-      }
+    const jobRecords = aiProspects.map(p => ({
+      user_id: userId,
+      session_id: sessionId,
+      job_type: 'dossier',
+      prospect_key: createProspectKey(p.name, p.state),
+      status: 'queued',
+    }));
 
-      // Create research job (user_id can be null for anonymous)
-      const { data: job, error: jobError } = await supabase
-        .from('research_jobs')
-        .insert({
-          user_id: userId,
-          session_id: sessionId,
-          job_type: 'dossier',
-          prospect_key: prospectKey,
-          status: 'queued',
-        })
-        .select('id')
-        .single();
+    // OPTIMIZATION #3: Batch insert dossiers
+    const { error: dossiersError } = await supabase
+      .from('prospect_dossiers')
+      .upsert(dossierRecords, { onConflict: 'session_id,prospect_key' });
 
-      if (job) {
-        jobs.push({
-          jobId: job.id,
-          prospectId: prospectKey,
-          status: 'queued',
-        });
-      }
+    if (dossiersError) {
+      console.error('Failed to batch insert dossiers:', dossiersError);
+      throw new Error('Failed to create prospect records');
+    }
 
-      prospects.push({
-        prospectId: prospectKey,
-        name: p.name,
-        state: p.state,
-        lat: coordinates.lat,
-        lng: coordinates.lng,
-        initialScore: p.score || 75,
-        angles: p.angles || ['Potential opportunity'],
-        researchStatus: 'queued',
-      });
+    // OPTIMIZATION #4: Batch insert jobs
+    const { data: insertedJobs, error: jobsError } = await supabase
+      .from('research_jobs')
+      .insert(jobRecords)
+      .select('id, prospect_key');
+
+    if (jobsError) {
+      console.error('Failed to batch insert jobs:', jobsError);
     }
 
     // Update session status
@@ -377,8 +370,26 @@ Return ONLY a valid JSON array. No explanation text.`;
       .update({ status: 'prospects_discovered' })
       .eq('id', sessionId);
 
+    // Build response
+    const prospects = dossierRecords.map(d => ({
+      prospectId: d.prospect_key,
+      name: d.prospect_name,
+      state: d.prospect_state,
+      lat: d.prospect_lat,
+      lng: d.prospect_lng,
+      initialScore: d.dossier.score,
+      angles: d.dossier.anglesForList,
+      researchStatus: 'queued',
+    }));
+
+    const jobs = (insertedJobs || []).map(j => ({
+      jobId: j.id,
+      prospectId: j.prospect_key,
+      status: 'queued',
+    }));
+
     const latency = Date.now() - startTime;
-    console.log(`Discovered ${prospects.length} prospects in ${latency}ms`);
+    console.log(`Discovered ${prospects.length} prospects in ${latency}ms (batch optimized)`);
 
     return new Response(
       JSON.stringify({ prospects, jobs, latency }),
