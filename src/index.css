@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Fonts are now preloaded in index.html with display=swap for non-blocking render */
+/* JetBrains Mono is only used for code blocks - load it async */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;

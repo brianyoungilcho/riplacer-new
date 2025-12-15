@@ -6,3 +6,4 @@ export { StepWhoYouSellTo } from './StepWhoYouSellTo';
 export { StepCompetitors } from './StepCompetitors';
 export { StepResults } from './StepResults';
 export { WorkspaceSidebar } from './WorkspaceSidebar';
+export { LazyOnboardingMap } from './LazyOnboardingMap';

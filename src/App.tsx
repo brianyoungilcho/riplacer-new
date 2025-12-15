@@ -1,21 +1,37 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { Loader2 } from "lucide-react";
+
+// Eagerly load the landing page (most common entry point)
 import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import OnboardingV2 from "./pages/OnboardingV2";
-import NotFound from "./pages/NotFound";
-import TermsOfService from "./pages/TermsOfService";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import CookiePolicy from "./pages/CookiePolicy";
-import AcceptableUsePolicy from "./pages/AcceptableUsePolicy";
-import Disclaimer from "./pages/Disclaimer";
-import RefundPolicy from "./pages/RefundPolicy";
+
+// Lazy load all other routes for better initial bundle size
+const Auth = lazy(() => import("./pages/Auth"));
+const OnboardingV2 = lazy(() => import("./pages/OnboardingV2"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const CookiePolicy = lazy(() => import("./pages/CookiePolicy"));
+const AcceptableUsePolicy = lazy(() => import("./pages/AcceptableUsePolicy"));
+const Disclaimer = lazy(() => import("./pages/Disclaimer"));
+const RefundPolicy = lazy(() => import("./pages/RefundPolicy"));
 
 const queryClient = new QueryClient();
+
+// Loading fallback for lazy routes
+const PageLoader = () => (
+  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="flex flex-col items-center gap-3">
+      <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <p className="text-sm text-gray-500">Loading...</p>
+    </div>
+  </div>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -24,18 +40,20 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/start" element={<OnboardingV2 />} />
-            <Route path="/terms" element={<TermsOfService />} />
-            <Route path="/privacy" element={<PrivacyPolicy />} />
-            <Route path="/cookies" element={<CookiePolicy />} />
-            <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
-            <Route path="/disclaimer" element={<Disclaimer />} />
-            <Route path="/refund" element={<RefundPolicy />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/start" element={<OnboardingV2 />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/cookies" element={<CookiePolicy />} />
+              <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
+              <Route path="/disclaimer" element={<Disclaimer />} />
+              <Route path="/refund" element={<RefundPolicy />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

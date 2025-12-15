@@ -8,7 +8,7 @@ import { StepWhereYouSell } from './StepWhereYouSell';
 import { StepWhoYouSellTo } from './StepWhoYouSellTo';
 import { StepCompetitors } from './StepCompetitors';
 import { StepResults } from './StepResults';
-import { OnboardingMap } from './OnboardingMap';
+import { LazyOnboardingMap } from './LazyOnboardingMap';
 import { SavedLeadsTab, SettingsTab, type Prospect } from './workspace';
 import { DiscoveryV2Tab } from '@/components/discovery-v2';
 import { type DiscoveryProspect } from '@/hooks/useDiscoverySession';
@@ -647,7 +647,7 @@ export function OnboardingPage() {
             </ResizablePanel>
             <ResizableHandle withHandle className="bg-gray-200 hover:bg-gray-300 transition-colors flex-shrink-0" />
             <ResizablePanel defaultSize={50} minSize={20} className="bg-gray-100 relative min-w-0 overflow-hidden">
-              <OnboardingMap 
+              <LazyOnboardingMap 
                 data={data} 
                 step={5} 
                 prospects={mapProspects}
@@ -728,7 +728,7 @@ export function OnboardingPage() {
             {/* Right Panel - Map */}
             {showMap && (
               <div className="w-1/2 bg-gray-100 relative min-w-0 overflow-hidden">
-                <OnboardingMap data={data} step={step} />
+                <LazyOnboardingMap data={data} step={step} />
               </div>
             )}
           </div>
