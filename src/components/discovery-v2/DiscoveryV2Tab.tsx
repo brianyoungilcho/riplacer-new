@@ -69,13 +69,19 @@ export function DiscoveryV2Tab({
     clearSession,
   } = useDiscoverySession();
 
-  // Polling for updates - using 6 second interval for better performance
+  // Polling for updates with adaptive intervals
+  // Pass fetchSession so polling updates the state in useDiscoverySession
   const { isPolling, stopPolling } = useDiscoveryPolling({
     sessionId: session?.id || null,
     enabled: !!session && progress < 100,
-    intervalMs: 6000, // Increased from 3000 to 6000ms for better performance
-    onUpdate: () => {
-      // State is automatically updated in useDiscoverySession via fetchSession
+    fetchSession, // This ensures state updates flow through useDiscoverySession
+    onUpdate: (state) => {
+      // Debug: log polling updates
+      console.log('[DiscoveryV2] Poll update:', {
+        prospectsCount: state.prospects?.length,
+        jobsCount: state.jobs?.length,
+        progress: state.progress,
+      });
     },
     onComplete: () => {
       toast.success('Research complete!');

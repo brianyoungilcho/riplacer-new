@@ -5,15 +5,24 @@ import type { DiscoverySessionState } from './useDiscoverySession';
 interface UseDiscoveryPollingOptions {
   sessionId: string | null;
   enabled?: boolean;
+  /**
+   * Called with the latest session state from the server.
+   * Use this to update your local state.
+   */
   onUpdate?: (state: DiscoverySessionState) => void;
   onComplete?: () => void;
+  /**
+   * Optional: pass fetchSession from useDiscoverySession to update state directly.
+   * If provided, this will be called instead of fetching via supabase.functions.invoke.
+   */
+  fetchSession?: (sessionId: string, processNextJob?: boolean) => Promise<any>;
 }
 
 // Adaptive polling intervals based on activity state
 const POLLING_INTERVALS = {
-  ACTIVE: 2000,      // 2s when jobs are running - user is actively waiting
-  EARLY: 4000,       // 4s in early stage (< 50% progress)
-  LATE: 8000,        // 8s when mostly complete (50-99%)
+  ACTIVE: 3000,      // 3s when jobs are running - user is actively waiting
+  EARLY: 5000,       // 5s in early stage (< 50% progress)
+  LATE: 10000,       // 10s when mostly complete (50-99%)
   BACKGROUND: 30000, // 30s when tab is hidden
 } as const;
 
@@ -39,6 +48,7 @@ export function useDiscoveryPolling({
   enabled = true,
   onUpdate,
   onComplete,
+  fetchSession,
 }: UseDiscoveryPollingOptions) {
   const [isPolling, setIsPolling] = useState(false);
   const [pollCount, setPollCount] = useState(0);
@@ -88,16 +98,28 @@ export function useDiscoveryPolling({
     if (!sessionId || isCompleteRef.current) return;
 
     try {
-      // Process next queued job on each poll to ensure all jobs get executed
-      const { data, error } = await supabase.functions.invoke('get-discovery-session', {
-        body: { sessionId, processNextJob: true },
-      });
-
-      if (error) {
-        console.error('Polling error:', error);
-        // On error, schedule retry with backoff
-        scheduleNextPoll(lastStateRef.current.progress, false);
-        return;
+      let data: any;
+      
+      // Use fetchSession if provided (updates state directly in useDiscoverySession)
+      if (fetchSession) {
+        data = await fetchSession(sessionId, true);
+        if (!data) {
+          console.error('Polling: fetchSession returned no data');
+          scheduleNextPoll(lastStateRef.current.progress, false);
+          return;
+        }
+      } else {
+        // Fallback: call edge function directly
+        const result = await supabase.functions.invoke('get-discovery-session', {
+          body: { sessionId, processNextJob: true },
+        });
+        
+        if (result.error) {
+          console.error('Polling error:', result.error);
+          scheduleNextPoll(lastStateRef.current.progress, false);
+          return;
+        }
+        data = result.data;
       }
 
       setPollCount(prev => prev + 1);
@@ -150,7 +172,7 @@ export function useDiscoveryPolling({
       // On error, schedule retry
       scheduleNextPoll(lastStateRef.current.progress, false);
     }
-  }, [sessionId, scheduleNextPoll]);
+  }, [sessionId, scheduleNextPoll, fetchSession]);
 
   // Start polling when enabled and sessionId is set
   useEffect(() => {
