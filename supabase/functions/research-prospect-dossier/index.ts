@@ -290,16 +290,13 @@ Return your findings as a structured JSON object with these fields:
           },
           { role: 'user', content: researchPrompt }
         ],
+        // Exclude unreliable sources only (don't restrict to specific domains - too limiting)
         search_domain_filter: [
-          'govspend.com',
-          'usaspending.gov', 
-          'sam.gov',
-          'opengov.com',
-          'linkedin.com',
-          '-reddit.com', // Exclude unreliable sources
+          '-reddit.com',
           '-twitter.com',
+          '-pinterest.com',
+          '-quora.com',
         ],
-        return_citations: true,
         search_recency_filter: 'year', // Focus on recent data
       }),
     });
@@ -340,7 +337,7 @@ Return your findings as a structured JSON object with these fields:
     const content = data.choices[0]?.message?.content || '{}';
     const citations = data.citations || [];
     
-    console.log(`Perplexity returned ${citations.length} citations`);
+    console.log(`Perplexity returned ${citations.length} citations:`, JSON.stringify(citations.slice(0, 3)));
 
     let dossier;
     try {
@@ -402,7 +399,9 @@ Return your findings as a structured JSON object with these fields:
     }
 
     // Save dossier
-    await supabase
+    console.log(`Saving dossier with ${dossier.sources?.length || 0} sources to DB`);
+    
+    const { error: saveError } = await supabase
       .from('prospect_dossiers')
       .update({
         dossier,
@@ -412,6 +411,10 @@ Return your findings as a structured JSON object with these fields:
       })
       .eq('session_id', sessionId)
       .eq('prospect_key', prospectKey);
+    
+    if (saveError) {
+      console.error('Error saving dossier:', saveError);
+    }
 
     // Update job status
     if (jobId) {
