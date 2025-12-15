@@ -132,7 +132,7 @@ function ZoomControls() {
   );
 }
 
-// Prospect marker component
+// Prospect marker component - clean score pill (no name to avoid cutoff)
 function ProspectMarker({ 
   prospect, 
   isSelected, 
@@ -147,29 +147,27 @@ function ProspectMarker({
   if (!prospect.lat || !prospect.lng) return null;
   
   const score = prospect.score || 0;
-  const showName = zoom >= 8;
   
-  // Create custom div icon
+  // Create custom div icon - always show clean score pill
   const icon = useMemo(() => {
-    const size = isSelected ? 'scale-110' : '';
-    const ring = isSelected ? 'ring-2 ring-red-500 ring-offset-2' : '';
+    const selectedStyles = isSelected 
+      ? 'ring-2 ring-red-500 ring-offset-2 scale-110 z-50' 
+      : 'hover:scale-105';
     
-    const html = showName
-      ? `<div class="prospect-marker flex items-center gap-1.5 px-2.5 py-1.5 rounded-full shadow-lg cursor-pointer transition-all duration-200 bg-white border border-gray-200 ${size} ${ring}" style="white-space: nowrap;">
-          <span class="text-xs font-semibold text-gray-900 max-w-[120px] truncate">${prospect.name}</span>
-          <span class="flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold flex-shrink-0">${score}</span>
-        </div>`
-      : `<div class="prospect-marker flex items-center justify-center w-10 h-10 rounded-full shadow-lg cursor-pointer transition-all duration-200 bg-red-500 text-white border-2 border-white ${size} ${ring}">
-          <span class="text-sm font-bold">${score}</span>
-        </div>`;
+    // Clean circular pill with just the score
+    const html = `
+      <div class="prospect-marker flex items-center justify-center w-10 h-10 rounded-full shadow-lg cursor-pointer transition-all duration-200 bg-red-500 text-white border-2 border-white ${selectedStyles}">
+        <span class="text-sm font-bold">${score}</span>
+      </div>
+    `;
     
     return L.divIcon({
       html,
       className: 'custom-marker',
-      iconSize: showName ? [150, 32] : [40, 40],
-      iconAnchor: showName ? [75, 32] : [20, 20],
+      iconSize: [40, 40],
+      iconAnchor: [20, 20],
     });
-  }, [prospect.name, score, isSelected, showName]);
+  }, [score, isSelected]);
   
   return (
     <Marker
@@ -310,10 +308,10 @@ export function LeafletMap({
         zoomControl={false}
         attributionControl={false}
       >
-        {/* OpenStreetMap tiles - free and reliable */}
+        {/* CartoDB Positron - clean, minimal grey style (similar to Mapbox light) */}
         <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
         />
         
         {/* State boundaries with highlighting */}
