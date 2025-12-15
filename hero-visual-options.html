@@ -309,6 +309,14 @@
         overflow: hidden;
       }
       .v-map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+      .v-map .us-bg {
+        opacity: 0.32;
+        mix-blend-mode: multiply;
+        filter: drop-shadow(0 18px 26px rgba(0,0,0,0.10));
+      }
+      .v-map .us-outline { fill: rgba(15, 23, 42, 0.07); stroke: rgba(15, 23, 42, 0.22); stroke-width: 2; }
+      .v-map .us-grid { stroke: rgba(15, 23, 42, 0.14); stroke-width: 1; }
+      .v-map .us-river { stroke: rgba(225, 29, 46, 0.22); stroke-width: 2; fill: none; opacity: 0.6; }
       .pin {
         position: absolute;
         width: 18px; height: 18px; border-radius: 99px;
@@ -650,31 +658,77 @@
                 </div>
 
                 <div class="map">
-                  <svg viewBox="0 0 900 520" preserveAspectRatio="none" aria-hidden="true">
-                    <path d="M60 110 C160 70, 260 150, 340 120 C430 90, 530 120, 610 90 C720 50, 800 130, 870 90"
-                      stroke="rgba(15,23,42,0.12)" stroke-width="2" fill="none"/>
-                    <path d="M70 250 C180 210, 270 320, 350 280 C460 230, 560 310, 660 260 C740 220, 810 300, 870 260"
-                      stroke="rgba(15,23,42,0.10)" stroke-width="2" fill="none"/>
-                    <path d="M90 390 C170 350, 260 430, 360 400 C470 370, 560 430, 650 390 C740 350, 810 420, 880 390"
-                      stroke="rgba(15,23,42,0.10)" stroke-width="2" fill="none"/>
-                    <!-- pseudo county lines -->
-                    <g stroke="rgba(15,23,42,0.08)" stroke-width="1">
-                      <path d="M120 70 v380" />
-                      <path d="M220 60 v400" />
-                      <path d="M320 70 v390" />
-                      <path d="M420 60 v410" />
-                      <path d="M520 70 v390" />
-                      <path d="M620 60 v410" />
-                      <path d="M720 70 v390" />
-                      <path d="M820 60 v410" />
+                  <!-- US silhouette + clipped grid to feel “map-like” without needing Mapbox -->
+                  <svg class="us-bg" viewBox="0 0 900 520" preserveAspectRatio="none" aria-hidden="true">
+                    <defs>
+                      <!-- A simplified (but recognizable) contiguous US outline -->
+                      <path
+                        id="us-shape"
+                        d="M122 150
+                           L150 132 L185 122 L222 120 L265 122 L306 126 L344 133 L382 132
+                           L420 124 L465 118 L510 118 L552 124 L592 130 L635 126 L674 114
+                           L712 110 L748 122 L776 138 L802 156 L822 168 L842 182
+                           L854 200 L852 218 L842 232 L830 244 L812 254 L790 266
+                           L770 282 L760 300 L750 318 L730 334 L704 346 L672 358
+                           L642 370 L610 384 L572 392 L532 396 L498 398 L464 402
+                           L438 412 L414 424 L388 432 L354 434 L322 430 L292 422
+                           L268 412 L244 404 L220 394 L200 382 L186 366 L176 350
+                           L168 332 L158 316 L144 296 L134 276 L126 254 L120 232
+                           L116 208 L114 188 L116 172 Z"
+                      />
+                      <clipPath id="clip-us">
+                        <use href="#us-shape"></use>
+                      </clipPath>
+                      <!-- subtle fade at edges -->
+                      <radialGradient id="us-fade" cx="55%" cy="45%" r="70%">
+                        <stop offset="0%" stop-color="white" stop-opacity="1"/>
+                        <stop offset="100%" stop-color="white" stop-opacity="0.55"/>
+                      </radialGradient>
+                      <mask id="fade-mask">
+                        <rect x="0" y="0" width="900" height="520" fill="url(#us-fade)"></rect>
+                      </mask>
+                    </defs>
+
+                    <!-- outline fill/stroke -->
+                    <use class="us-outline" href="#us-shape" mask="url(#fade-mask)"></use>
+
+                    <!-- “state-ish” lines, clipped inside US -->
+                    <g clip-path="url(#clip-us)" mask="url(#fade-mask)">
+                      <g class="us-grid">
+                        <!-- verticals -->
+                        <path d="M190 120 v300" />
+                        <path d="M260 120 v300" />
+                        <path d="M330 120 v310" />
+                        <path d="M400 120 v320" />
+                        <path d="M470 120 v330" />
+                        <path d="M540 120 v330" />
+                        <path d="M610 120 v320" />
+                        <path d="M680 120 v310" />
+                        <path d="M750 120 v300" />
+                        <!-- horizontals -->
+                        <path d="M120 180 h740" />
+                        <path d="M120 240 h740" />
+                        <path d="M120 300 h740" />
+                        <path d="M120 360 h740" />
+                      </g>
+                      <!-- a “river-ish” accent line -->
+                      <path class="us-river" d="M250 150 C310 190, 340 220, 380 250 C430 286, 470 320, 520 342 C590 372, 640 372, 710 350" />
+                    </g>
+
+                    <!-- Alaska / Hawaii mini in bottom-left (very subtle) -->
+                    <g opacity="0.25" mask="url(#fade-mask)">
+                      <path class="us-outline" d="M140 430 L162 420 L190 422 L210 436 L204 454 L178 460 L152 450 Z" />
+                      <path class="us-outline" d="M240 452 L250 448 L262 452 L258 462 L246 462 Z" />
+                      <path class="us-outline" d="M268 460 L276 456 L286 460 L282 468 L272 468 Z" />
                     </g>
                   </svg>
 
-                  <div class="pin" style="left: 32%; top: 36%;"></div>
-                  <div class="pin" style="left: 58%; top: 42%;"></div>
-                  <div class="pin" style="left: 66%; top: 68%;"></div>
-                  <div class="pin small" style="left: 44%; top: 58%;"></div>
-                  <div class="pin small" style="left: 22%; top: 62%;"></div>
+                  <!-- Pins are placed roughly in the Midwest / central US -->
+                  <div class="pin" style="left: 48%; top: 44%;"></div>
+                  <div class="pin" style="left: 60%; top: 46%;"></div>
+                  <div class="pin" style="left: 66%; top: 56%;"></div>
+                  <div class="pin small" style="left: 40%; top: 54%;"></div>
+                  <div class="pin small" style="left: 34%; top: 46%;"></div>
 
                   <div class="card callout">
                     <div class="k">Rip opportunity</div>

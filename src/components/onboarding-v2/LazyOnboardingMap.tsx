@@ -2,9 +2,9 @@ import { lazy, Suspense, memo } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { OnboardingData } from './OnboardingPage';
 
-// Lazy load the map component (which includes heavy mapbox-gl library ~500KB)
-const OnboardingMap = lazy(() => 
-  import('./OnboardingMap').then(module => ({ default: module.OnboardingMap }))
+// Lazy load the Leaflet map component (lighter than Mapbox ~40KB vs ~500KB)
+const LeafletMap = lazy(() => 
+  import('./LeafletMap').then(module => ({ default: module.LeafletMap }))
 );
 
 // Prospect type for map markers
@@ -47,7 +47,7 @@ function MapSkeleton() {
 export const LazyOnboardingMap = memo(function LazyOnboardingMap(props: LazyOnboardingMapProps) {
   return (
     <Suspense fallback={<MapSkeleton />}>
-      <OnboardingMap {...props} />
+      <LeafletMap {...props} />
     </Suspense>
   );
 });
