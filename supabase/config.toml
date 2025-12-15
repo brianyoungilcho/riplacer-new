@@ -52,7 +52,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.research-prospect-dossier]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-account-plan]
 verify_jwt = true

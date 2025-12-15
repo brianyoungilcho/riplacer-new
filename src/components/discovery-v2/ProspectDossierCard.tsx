@@ -320,23 +320,52 @@ function DossierContent({ prospect, dossier, score, angles, onGeneratePlan, isEn
         </div>
       )}
 
-      {/* Sources */}
+      {/* Sources / Citations */}
       {dossier?.sources && dossier.sources.length > 0 && (
-        <div>
-          <div className="text-xs font-medium text-muted-foreground mb-2">Sources</div>
-          <div className="flex flex-wrap gap-2">
-            {dossier.sources.slice(0, 5).map((source, idx) => (
-              <a
-                key={idx}
-                href={source.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-              >
-                <ExternalLink className="w-3 h-3" />
-                {source.title || (source.url ? new URL(source.url).hostname : 'Source')}
-              </a>
-            ))}
+        <div className="border-t border-border pt-4 mt-4">
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-3">
+            <ExternalLink className="w-3.5 h-3.5" />
+            Research Sources ({dossier.sources.length})
+          </div>
+          <div className="space-y-2">
+            {dossier.sources.slice(0, 8).map((source, idx) => {
+              let hostname = 'Source';
+              try {
+                if (source.url) hostname = new URL(source.url).hostname.replace('www.', '');
+              } catch {}
+              
+              return (
+                <a
+                  key={idx}
+                  href={source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-start gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors group"
+                >
+                  <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <ExternalLink className="w-3 h-3 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-foreground group-hover:text-primary truncate">
+                      {source.title || hostname}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {hostname}
+                    </p>
+                    {source.excerpt && (
+                      <p className="text-xs text-muted-foreground/80 mt-1 line-clamp-2">
+                        {source.excerpt}
+                      </p>
+                    )}
+                  </div>
+                </a>
+              );
+            })}
+            {dossier.sources.length > 8 && (
+              <p className="text-xs text-muted-foreground text-center py-1">
+                +{dossier.sources.length - 8} more sources
+              </p>
+            )}
           </div>
         </div>
       )}
