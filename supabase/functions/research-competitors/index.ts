@@ -130,16 +130,11 @@ serve(async (req) => {
       );
     }
 
-    // Use direct Google Gemini API with Google Search grounding
+    // Try Google Gemini first for search grounding, fallback to Lovable AI
     const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
-    if (!GOOGLE_GEMINI_API_KEY) {
-      throw new Error('GOOGLE_GEMINI_API_KEY is not configured');
-    }
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
     console.log('Input:', { productDescription, companyDomain });
-    
-    // Determine if product description is generic (auto-generated) or specific (user-provided)
-    const isGenericDescription = productDescription.toLowerCase().includes('products and services from');
     
     // Clean company name from domain for exclusion
     const companyName = companyDomain?.replace(/\.(com|io|net|org|co|ai|dev)$/i, '').replace(/^www\./, '') || '';
@@ -154,54 +149,89 @@ IMPORTANT:
 - Return ONLY a valid JSON array like: ["Company A", "Company B", "Company C"]
 - Order by market presence (largest first)`;
 
-    console.log('Calling Gemini 2.5 Flash with Google Search grounding...');
-    
-    // Call Gemini API directly with google_search_retrieval tool
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_GEMINI_API_KEY}`,
-      {
+    let response;
+    let usedModel = 'unknown';
+
+    // Try Google Gemini with search grounding first
+    if (GOOGLE_GEMINI_API_KEY) {
+      console.log('Calling Gemini 2.5 Flash with Google Search grounding...');
+      
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: prompt }]
+              }
+            ],
+            tools: [
+              {
+                google_search: {}
+              }
+            ],
+            generationConfig: {
+              temperature: 0.5,
+              maxOutputTokens: 2048,
+            }
+          }),
+        }
+      );
+      usedModel = 'gemini-2.5-flash';
+    } else if (LOVABLE_API_KEY) {
+      // Fallback to Lovable AI
+      console.log('GOOGLE_GEMINI_API_KEY not available, using Lovable AI fallback...');
+      
+      response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: prompt }]
-            }
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            { role: 'system', content: 'You are a market research expert. Return only valid JSON arrays.' },
+            { role: 'user', content: prompt }
           ],
-          tools: [
-            {
-              google_search: {}
-            }
-          ],
-          generationConfig: {
-            temperature: 0.5,
-            maxOutputTokens: 2048,
-          }
         }),
-      }
-    );
+      });
+      usedModel = 'lovable-gemini-2.5-flash';
+    } else {
+      throw new Error('No AI API key configured (GOOGLE_GEMINI_API_KEY or LOVABLE_API_KEY)');
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Gemini API error:', response.status, errorText);
-      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+      console.error('AI API error:', response.status, errorText);
+      throw new Error(`AI API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    console.log('Gemini 2.5 Flash response received');
+    console.log(`${usedModel} response received`);
     
-    // Extract content from Gemini response format
-    const parts = data.candidates?.[0]?.content?.parts ?? [];
-    const content = parts
-      .map((p: any) => (typeof p.text === 'string' ? p.text : ''))
-      .join('\n')
-      .trim() || '[]';
-
-    console.log('Gemini raw parts (truncated):', JSON.stringify(parts, null, 2).slice(0, 2000));
-    console.log('Gemini text content snippet:', content.slice(0, 500));
+    // Extract content based on response format
+    let content = '';
+    
+    if (usedModel.startsWith('lovable')) {
+      // Lovable AI / OpenAI format
+      content = data.choices?.[0]?.message?.content || '[]';
+    } else {
+      // Google Gemini direct API format
+      const parts = data.candidates?.[0]?.content?.parts ?? [];
+      content = parts
+        .map((p: any) => (typeof p.text === 'string' ? p.text : ''))
+        .join('\n')
+        .trim() || '[]';
+      console.log('Gemini raw parts (truncated):', JSON.stringify(parts, null, 2).slice(0, 2000));
+    }
+    
+    console.log('AI text content snippet:', content.slice(0, 500));
     
     // Extract grounding metadata if available
     const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
@@ -311,8 +341,8 @@ IMPORTANT:
         sources,
         confidence: competitors.length > 0 ? 0.9 : 0.3,
         cached: false,
-        model: 'gemini-2.5-flash',
-        webSearchEnabled: true,
+        model: usedModel,
+        webSearchEnabled: usedModel === 'gemini-2.5-flash',
         searchQueries: groundingMetadata?.webSearchQueries || [],
         error: competitors.length === 0 ? 'no_competitors_found' : null,
       }),
