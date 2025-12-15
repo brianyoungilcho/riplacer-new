@@ -219,43 +219,45 @@ function DossierContent({ prospect, dossier, score, angles, onGeneratePlan, isEn
         </div>
       ) : null}
 
-      {/* Incumbent & Contract */}
-      <div className="grid grid-cols-2 gap-4">
-        {dossier.incumbent && (
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1">
-              <Building2 className="w-3.5 h-3.5" />
-              Current Vendor
+      {/* Incumbent & Contract - only show if dossier has this data */}
+      {(dossier?.incumbent || dossier?.contract) && (
+        <div className="grid grid-cols-2 gap-4">
+          {dossier?.incumbent && (
+            <div className="bg-muted/50 rounded-lg p-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
+                <Building2 className="w-3.5 h-3.5" />
+                Current Vendor
+              </div>
+              <p className="text-sm font-medium text-foreground">
+                {dossier.incumbent.vendor || 'Unknown'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {Math.round((dossier.incumbent.confidence || 0) * 100)}% confidence
+              </p>
             </div>
-            <p className="text-sm font-medium text-gray-900">
-              {dossier.incumbent.vendor || 'Unknown'}
-            </p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {Math.round(dossier.incumbent.confidence * 100)}% confidence
-            </p>
-          </div>
-        )}
-        
-        {dossier.contract && (
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1">
-              <FileText className="w-3.5 h-3.5" />
-              Contract
+          )}
+          
+          {dossier?.contract && (
+            <div className="bg-muted/50 rounded-lg p-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
+                <FileText className="w-3.5 h-3.5" />
+                Contract
+              </div>
+              <p className="text-sm font-medium text-foreground">
+                {dossier.contract.estimatedAnnualValue || 'Unknown value'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Expires: {dossier.contract.estimatedExpiration || 'Unknown'}
+              </p>
             </div>
-            <p className="text-sm font-medium text-gray-900">
-              {dossier.contract.estimatedAnnualValue || 'Unknown value'}
-            </p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Expires: {dossier.contract.estimatedExpiration || 'Unknown'}
-            </p>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Stakeholders */}
-      {dossier.stakeholders && dossier.stakeholders.length > 0 && (
+      {dossier?.stakeholders && dossier.stakeholders.length > 0 && (
         <div>
-          <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-2">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
             <Users className="w-3.5 h-3.5" />
             Key Stakeholders
           </div>
@@ -263,8 +265,8 @@ function DossierContent({ prospect, dossier, score, angles, onGeneratePlan, isEn
             {dossier.stakeholders.slice(0, 3).map((s, idx) => (
               <div key={idx} className="flex items-center justify-between text-sm">
                 <div>
-                  <span className="font-medium text-gray-700">{s.name || 'Unknown'}</span>
-                  {s.title && <span className="text-gray-400 ml-1">• {s.title}</span>}
+                  <span className="font-medium text-foreground/80">{s.name || 'Unknown'}</span>
+                  {s.title && <span className="text-muted-foreground ml-1">• {s.title}</span>}
                 </div>
                 <Badge 
                   variant="outline" 
@@ -272,7 +274,7 @@ function DossierContent({ prospect, dossier, score, angles, onGeneratePlan, isEn
                     "text-xs",
                     s.stance === 'supporter' && "border-green-200 text-green-700",
                     s.stance === 'opponent' && "border-red-200 text-red-700",
-                    s.stance === 'neutral' && "border-gray-200 text-gray-600"
+                    s.stance === 'neutral' && "border-border text-muted-foreground"
                   )}
                 >
                   {s.stance}
@@ -284,16 +286,16 @@ function DossierContent({ prospect, dossier, score, angles, onGeneratePlan, isEn
       )}
 
       {/* Macro Signals */}
-      {dossier.macroSignals && dossier.macroSignals.length > 0 && (
+      {dossier?.macroSignals && dossier.macroSignals.length > 0 && (
         <div>
-          <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-2">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
             <TrendingUp className="w-3.5 h-3.5" />
             Signals
           </div>
           <div className="flex flex-wrap gap-2">
             {dossier.macroSignals.map((signal, idx) => (
               <Badge key={idx} variant="secondary" className="text-xs">
-                {signal.type}: {signal.description.slice(0, 40)}...
+                {signal.type}: {signal.description?.slice(0, 40) || 'Unknown'}...
               </Badge>
             ))}
           </div>
@@ -301,9 +303,9 @@ function DossierContent({ prospect, dossier, score, angles, onGeneratePlan, isEn
       )}
 
       {/* Recommended Angles */}
-      {dossier.recommendedAngles && dossier.recommendedAngles.length > 0 && (
+      {dossier?.recommendedAngles && dossier.recommendedAngles.length > 0 && (
         <div>
-          <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-2">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
             <Lightbulb className="w-3.5 h-3.5" />
             Recommended Angles
           </div>
@@ -311,7 +313,7 @@ function DossierContent({ prospect, dossier, score, angles, onGeneratePlan, isEn
             {dossier.recommendedAngles.map((angle, idx) => (
               <div key={idx} className="bg-primary/5 rounded-lg p-3">
                 <h5 className="text-sm font-medium text-primary">{angle.title}</h5>
-                <p className="text-sm text-gray-600 mt-1">{angle.message}</p>
+                <p className="text-sm text-muted-foreground mt-1">{angle.message}</p>
               </div>
             ))}
           </div>
@@ -319,9 +321,9 @@ function DossierContent({ prospect, dossier, score, angles, onGeneratePlan, isEn
       )}
 
       {/* Sources */}
-      {dossier.sources && dossier.sources.length > 0 && (
+      {dossier?.sources && dossier.sources.length > 0 && (
         <div>
-          <div className="text-xs font-medium text-gray-500 mb-2">Sources</div>
+          <div className="text-xs font-medium text-muted-foreground mb-2">Sources</div>
           <div className="flex flex-wrap gap-2">
             {dossier.sources.slice(0, 5).map((source, idx) => (
               <a
@@ -332,7 +334,7 @@ function DossierContent({ prospect, dossier, score, angles, onGeneratePlan, isEn
                 className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
               >
                 <ExternalLink className="w-3 h-3" />
-                {source.title || new URL(source.url).hostname}
+                {source.title || (source.url ? new URL(source.url).hostname : 'Source')}
               </a>
             ))}
           </div>
