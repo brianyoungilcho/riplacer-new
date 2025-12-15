@@ -40,16 +40,16 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.create-discovery-session]
-verify_jwt = true
+verify_jwt = false
 
 [functions.research-competitive-advantages]
-verify_jwt = true
+verify_jwt = false
 
 [functions.discover-prospects-v2]
-verify_jwt = true
+verify_jwt = false
 
 [functions.get-discovery-session]
-verify_jwt = true
+verify_jwt = false
 
 [functions.research-prospect-dossier]
 verify_jwt = false
