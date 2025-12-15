@@ -35,17 +35,20 @@ export function ProspectDossierCard({
   const [showAllAngles, setShowAllAngles] = useState(false);
   
   const dossier = prospect.dossier;
-  // Show dossier content if it exists - regardless of status
-  // Status 'queued' with data means we have initial AI results, show them!
-  // Only show loading when status is 'researching' AND no data exists yet
-  const hasDossierData = dossier && (dossier.summary || dossier.score);
-  const isReady = hasDossierData;
-  const isResearching = (prospect.dossierStatus === 'researching' || prospect.researchStatus === 'researching') && !hasDossierData;
-  const isQueued = (prospect.dossierStatus === 'queued' || prospect.researchStatus === 'queued') && !hasDossierData;
-  const isFailed = prospect.dossierStatus === 'failed' || prospect.researchStatus === 'failed';
-
+  // Check if we have ANY meaningful data to show
+  // Initial data from discovery includes: score, angles, summary
+  // Deep research adds: incumbent, stakeholders, contract, etc.
   const score = dossier?.score || prospect.score || prospect.initialScore || 0;
   const angles = dossier?.anglesForList || prospect.angles || [];
+  const hasAnyData = score > 0 || angles.length > 0 || dossier?.summary;
+  
+  // Show content if we have any data - don't wait for "ready" status
+  const isReady = hasAnyData;
+  const isDeepResearching = prospect.dossierStatus === 'researching' || prospect.researchStatus === 'researching';
+  const isQueued = (prospect.dossierStatus === 'queued' || prospect.researchStatus === 'queued') && !hasAnyData;
+  const isFailed = prospect.dossierStatus === 'failed' || prospect.researchStatus === 'failed';
+
+  // score and angles already computed above
 
   const getScoreColor = (s: number) => {
     if (s >= 80) return 'bg-red-500';
@@ -78,8 +81,8 @@ export function ProspectDossierCard({
             <h4 className="font-medium text-gray-900 truncate">
               {prospect.name}
             </h4>
-            {isResearching && (
-              <Loader2 className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0" />
+            {isDeepResearching && (
+              <Loader2 className="w-4 h-4 text-primary animate-spin flex-shrink-0" />
             )}
             {isFailed && (
               <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
@@ -121,31 +124,24 @@ export function ProspectDossierCard({
       {/* Expanded Content */}
       {isExpanded && (
         <div className="px-4 pb-4 border-t border-gray-100">
-          {isReady && dossier ? (
+          {isReady ? (
             <DossierContent 
+              prospect={prospect}
               dossier={dossier} 
+              score={score}
+              angles={angles}
               onGeneratePlan={showGeneratePlan ? onGeneratePlan : undefined}
-              isEnriching={prospect.dossierStatus === 'researching' || prospect.dossierStatus === 'queued'}
+              isEnriching={isDeepResearching || prospect.dossierStatus === 'queued'}
             />
-          ) : isResearching ? (
-            <div className="py-8 text-center">
-              <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-3" />
-              <p className="text-sm text-gray-500">Researching this prospect...</p>
-            </div>
           ) : isQueued ? (
-            <div className="py-8 text-center">
-              <Loader2 className="w-8 h-8 text-gray-300 animate-spin mx-auto mb-3" />
-              <p className="text-sm text-gray-500">Queued for deep research...</p>
-            </div>
+            <DossierSkeleton />
           ) : isFailed ? (
             <div className="py-8 text-center">
-              <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-3" />
-              <p className="text-sm text-gray-500">Research failed. Try again later.</p>
+              <AlertCircle className="w-8 h-8 text-destructive/60 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">Research failed. Try again later.</p>
             </div>
           ) : (
-            <div className="py-8 text-center">
-              <p className="text-sm text-gray-500">No data available</p>
-            </div>
+            <DossierSkeleton />
           )}
         </div>
       )}
@@ -153,27 +149,75 @@ export function ProspectDossierCard({
   );
 }
 
+// Skeleton loading component for consistent loading state
+function DossierSkeleton() {
+  return (
+    <div className="pt-4 space-y-4">
+      {/* Summary skeleton */}
+      <div className="space-y-2">
+        <div className="h-4 bg-muted rounded skeleton-shimmer w-full" />
+        <div className="h-4 bg-muted rounded skeleton-shimmer w-4/5" />
+        <div className="h-4 bg-muted rounded skeleton-shimmer w-3/5" />
+      </div>
+      
+      {/* Grid skeleton */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+          <div className="h-3 bg-muted rounded skeleton-shimmer w-20" />
+          <div className="h-4 bg-muted rounded skeleton-shimmer w-24" />
+        </div>
+        <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+          <div className="h-3 bg-muted rounded skeleton-shimmer w-16" />
+          <div className="h-4 bg-muted rounded skeleton-shimmer w-28" />
+        </div>
+      </div>
+      
+      {/* Stakeholders skeleton */}
+      <div className="space-y-2">
+        <div className="h-3 bg-muted rounded skeleton-shimmer w-24" />
+        <div className="h-4 bg-muted rounded skeleton-shimmer w-40" />
+        <div className="h-4 bg-muted rounded skeleton-shimmer w-36" />
+      </div>
+    </div>
+  );
+}
+
 interface DossierContentProps {
-  dossier: ProspectDossier;
+  prospect: DiscoveryProspect;
+  dossier?: ProspectDossier;
+  score: number;
+  angles: string[];
   onGeneratePlan?: () => void;
   isEnriching?: boolean;
 }
 
-function DossierContent({ dossier, onGeneratePlan, isEnriching }: DossierContentProps) {
+function DossierContent({ prospect, dossier, score, angles, onGeneratePlan, isEnriching }: DossierContentProps) {
+  // Show summary from dossier, or generate a basic one from available data
+  const summary = dossier?.summary || (angles.length > 0 
+    ? `${prospect.name} in ${prospect.state} shows potential for replacement with signals including: ${angles.join(', ')}.`
+    : null);
+
   return (
     <div className="pt-4 space-y-5">
       {/* Enrichment indicator */}
       {isEnriching && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg text-sm text-blue-700">
+        <div className="flex items-center gap-2 px-3 py-2 bg-primary/10 rounded-lg text-sm text-primary">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span>Deep research in progress... Results will update automatically.</span>
         </div>
       )}
       
       {/* Summary */}
-      <div>
-        <p className="text-sm text-gray-700">{dossier.summary}</p>
-      </div>
+      {summary ? (
+        <div>
+          <p className="text-sm text-foreground/80">{summary}</p>
+        </div>
+      ) : isEnriching ? (
+        <div className="space-y-2">
+          <div className="h-4 bg-muted rounded skeleton-shimmer w-full" />
+          <div className="h-4 bg-muted rounded skeleton-shimmer w-4/5" />
+        </div>
+      ) : null}
 
       {/* Incumbent & Contract */}
       <div className="grid grid-cols-2 gap-4">
