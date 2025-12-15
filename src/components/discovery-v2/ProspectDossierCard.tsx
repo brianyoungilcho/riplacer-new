@@ -35,10 +35,13 @@ export function ProspectDossierCard({
   const [showAllAngles, setShowAllAngles] = useState(false);
   
   const dossier = prospect.dossier;
-  // Show dossier content if it exists and status is not failed
-  // This allows showing partial data even when research is still in progress
-  const isReady = (prospect.dossierStatus === 'ready' || prospect.dossierStatus === 'researching') && dossier;
-  const isResearching = (prospect.dossierStatus === 'researching' || prospect.researchStatus === 'researching') && !dossier;
+  // Show dossier content if it exists - regardless of status
+  // Status 'queued' with data means we have initial AI results, show them!
+  // Only show loading when status is 'researching' AND no data exists yet
+  const hasDossierData = dossier && (dossier.summary || dossier.score);
+  const isReady = hasDossierData;
+  const isResearching = (prospect.dossierStatus === 'researching' || prospect.researchStatus === 'researching') && !hasDossierData;
+  const isQueued = (prospect.dossierStatus === 'queued' || prospect.researchStatus === 'queued') && !hasDossierData;
   const isFailed = prospect.dossierStatus === 'failed' || prospect.researchStatus === 'failed';
 
   const score = dossier?.score || prospect.score || prospect.initialScore || 0;
@@ -118,24 +121,30 @@ export function ProspectDossierCard({
       {/* Expanded Content */}
       {isExpanded && (
         <div className="px-4 pb-4 border-t border-gray-100">
-          {isResearching ? (
+          {isReady && dossier ? (
+            <DossierContent 
+              dossier={dossier} 
+              onGeneratePlan={showGeneratePlan ? onGeneratePlan : undefined}
+              isEnriching={prospect.dossierStatus === 'researching' || prospect.dossierStatus === 'queued'}
+            />
+          ) : isResearching ? (
             <div className="py-8 text-center">
               <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-3" />
               <p className="text-sm text-gray-500">Researching this prospect...</p>
+            </div>
+          ) : isQueued ? (
+            <div className="py-8 text-center">
+              <Loader2 className="w-8 h-8 text-gray-300 animate-spin mx-auto mb-3" />
+              <p className="text-sm text-gray-500">Queued for deep research...</p>
             </div>
           ) : isFailed ? (
             <div className="py-8 text-center">
               <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-3" />
               <p className="text-sm text-gray-500">Research failed. Try again later.</p>
             </div>
-          ) : isReady && dossier ? (
-            <DossierContent 
-              dossier={dossier} 
-              onGeneratePlan={showGeneratePlan ? onGeneratePlan : undefined}
-            />
           ) : (
             <div className="py-8 text-center">
-              <p className="text-sm text-gray-500">Waiting for research to start...</p>
+              <p className="text-sm text-gray-500">No data available</p>
             </div>
           )}
         </div>
@@ -147,11 +156,20 @@ export function ProspectDossierCard({
 interface DossierContentProps {
   dossier: ProspectDossier;
   onGeneratePlan?: () => void;
+  isEnriching?: boolean;
 }
 
-function DossierContent({ dossier, onGeneratePlan }: DossierContentProps) {
+function DossierContent({ dossier, onGeneratePlan, isEnriching }: DossierContentProps) {
   return (
     <div className="pt-4 space-y-5">
+      {/* Enrichment indicator */}
+      {isEnriching && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg text-sm text-blue-700">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span>Deep research in progress... Results will update automatically.</span>
+        </div>
+      )}
+      
       {/* Summary */}
       <div>
         <p className="text-sm text-gray-700">{dossier.summary}</p>

@@ -131,12 +131,45 @@ export function DiscoveryV2Tab({
     }
   }, [user, session?.id, generateAccountPlan]);
 
-  // Sync expanded prospect with selected
+  // Refs for prospect cards to enable scroll-to-view
+  const prospectCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  
+  // Track the last externally selected prospect ID to detect when it changes from map click
+  const lastExternalSelectionRef = useRef<string | null>(null);
+  
+  // Sync expanded prospect with selected AND scroll to it when map marker is clicked
   useEffect(() => {
     if (selectedProspectId) {
+      // Only scroll if this is a NEW selection from map (not from clicking the card itself)
+      // We detect this by comparing with expandedProspectId - if they're different, it came from map
+      const isFromMap = expandedProspectId !== selectedProspectId;
+      
+      console.log('[DiscoveryV2Tab] selectedProspectId changed:', {
+        selectedProspectId,
+        expandedProspectId,
+        isFromMap,
+        hasRef: prospectCardRefs.current.has(selectedProspectId),
+        availableRefs: Array.from(prospectCardRefs.current.keys()),
+      });
+      
       setExpandedProspectId(selectedProspectId);
+      
+      // Scroll the prospect card into view when selected from map
+      if (isFromMap) {
+        // Use a small delay to ensure state has updated and card is expanded
+        setTimeout(() => {
+          const cardEl = prospectCardRefs.current.get(selectedProspectId);
+          console.log('[DiscoveryV2Tab] Scrolling to:', selectedProspectId, 'found:', !!cardEl);
+          if (cardEl) {
+            cardEl.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'center' 
+            });
+          }
+        }, 50);
+      }
     }
-  }, [selectedProspectId]);
+  }, [selectedProspectId]); // Note: intentionally not including expandedProspectId to avoid loops
 
   // Handle prospect click
   const handleProspectToggle = (prospect: DiscoveryProspect, isLocked: boolean) => {
@@ -484,14 +517,24 @@ export function DiscoveryV2Tab({
           ) : visibleProspects.length > 0 ? (
             <>
               {visibleProspects.map((prospect) => (
-                <ProspectDossierCardMemo
+                <div 
                   key={prospect.prospectId}
-                  prospect={prospect}
-                  isExpanded={expandedProspectId === prospect.prospectId}
-                  onToggle={() => handleProspectToggle(prospect, false)}
-                  onGeneratePlan={() => handleGeneratePlan(prospect.prospectId, prospect.name)}
-                  showGeneratePlan={!!user}
-                />
+                  ref={(el) => {
+                    if (el) {
+                      prospectCardRefs.current.set(prospect.prospectId, el);
+                    } else {
+                      prospectCardRefs.current.delete(prospect.prospectId);
+                    }
+                  }}
+                >
+                  <ProspectDossierCardMemo
+                    prospect={prospect}
+                    isExpanded={expandedProspectId === prospect.prospectId}
+                    onToggle={() => handleProspectToggle(prospect, false)}
+                    onGeneratePlan={() => handleGeneratePlan(prospect.prospectId, prospect.name)}
+                    showGeneratePlan={!!user}
+                  />
+                </div>
               ))}
 
               {/* Locked prospects preview (blurred) */}

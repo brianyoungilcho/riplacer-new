@@ -97,9 +97,10 @@ interface OnboardingMapProps {
   prospects?: MapProspect[];
   selectedProspectId?: string | null;
   onProspectClick?: (id: string) => void;
+  onMapClick?: () => void; // Called when clicking on map (not on a marker) - useful for deselecting
 }
 
-export function OnboardingMap({ data, step, prospects = [], selectedProspectId, onProspectClick }: OnboardingMapProps) {
+export function OnboardingMap({ data, step, prospects = [], selectedProspectId, onProspectClick, onMapClick }: OnboardingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
@@ -113,6 +114,12 @@ export function OnboardingMap({ data, step, prospects = [], selectedProspectId, 
   const isFlyingRef = useRef(false);
   const lastFlewToRef = useRef<string | null>(null);
   const zoomUpdateTimeoutRef = useRef<number | null>(null);
+  
+  // Ref for onProspectClick to avoid stale closures in marker click handlers
+  const onProspectClickRef = useRef(onProspectClick);
+  useEffect(() => {
+    onProspectClickRef.current = onProspectClick;
+  }, [onProspectClick]);
 
   // Fetch Mapbox token from edge function
   useEffect(() => {
@@ -201,6 +208,9 @@ export function OnboardingMap({ data, step, prospects = [], selectedProspectId, 
       }
     });
 
+    // Click handler for map background (deselect prospect when clicking empty area)
+    // Note: This is handled via a ref callback below since onMapClick may change
+
     return () => {
       map.current?.remove();
       map.current = null;
@@ -224,6 +234,36 @@ export function OnboardingMap({ data, step, prospects = [], selectedProspectId, 
 
     return () => {
       resizeObserver.disconnect();
+    };
+  }, [mapLoaded]);
+  
+  // Track ref for onMapClick to avoid adding/removing listeners repeatedly
+  const onMapClickRef = useRef(onMapClick);
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
+  
+  // Add click handler for map background (deselect when clicking empty area)
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+    
+    const handleMapClick = (e: mapboxgl.MapMouseEvent) => {
+      // Check if the click was on a marker by looking at the original event target
+      const target = e.originalEvent.target as HTMLElement;
+      
+      // If clicked on a marker element (has prospect-marker class or is inside one), ignore
+      if (target.closest('.prospect-marker')) {
+        return;
+      }
+      
+      // Click was on map background - trigger deselect
+      onMapClickRef.current?.();
+    };
+    
+    map.current.on('click', handleMapClick);
+    
+    return () => {
+      map.current?.off('click', handleMapClick);
     };
   }, [mapLoaded]);
   
@@ -358,13 +398,15 @@ export function OnboardingMap({ data, step, prospects = [], selectedProspectId, 
     el.style.zIndex = isSelected ? '1000' : '1';
     
     // Attach click handler to parent element so it persists through innerHTML updates
+    // Use ref to avoid stale closure issues - the ref always has the latest callback
     el.addEventListener('click', (e) => {
       e.stopPropagation();
-      onProspectClick?.(prospect.id);
+      console.log('[OnboardingMap] Marker clicked:', prospect.id, 'callback exists:', !!onProspectClickRef.current);
+      onProspectClickRef.current?.(prospect.id);
     });
     
     return el;
-  }, [onProspectClick, getMarkerHTML]);
+  }, [getMarkerHTML]); // Removed onProspectClick from deps since we use ref
 
   // Get anchor point based on zoom level
   const getMarkerAnchor = useCallback((zoom: number) => {
@@ -432,7 +474,7 @@ export function OnboardingMap({ data, step, prospects = [], selectedProspectId, 
     });
     
     prevZoomLevelRef.current = currentZoom;
-  }, [zoomLevel, selectedProspectId, prospects, mapLoaded, getMarkerHTML, getMarkerAnchor, createMarkerElement, onProspectClick]);
+  }, [zoomLevel, selectedProspectId, prospects, mapLoaded, getMarkerHTML, getMarkerAnchor, createMarkerElement]); // Removed onProspectClick - using ref now
 
   // Add/remove markers when prospects list changes (separate from zoom updates)
   useEffect(() => {

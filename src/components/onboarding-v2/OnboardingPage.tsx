@@ -653,6 +653,7 @@ export function OnboardingPage() {
                 prospects={mapProspects}
                 selectedProspectId={selectedProspectId}
                 onProspectClick={(id) => setSelectedProspectId(id)}
+                onMapClick={() => setSelectedProspectId(null)}
               />
             </ResizablePanel>
           </ResizablePanelGroup>

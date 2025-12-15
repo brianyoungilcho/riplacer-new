@@ -35,10 +35,10 @@ export function useDiscoveryPolling({
     if (!sessionId || isCompleteRef.current) return;
 
     try {
-      // Only process jobs on first poll, subsequent polls just fetch state
-      const isFirstPoll = pollCount === 0;
+      // Process next queued job on each poll to ensure all jobs get executed
+      // The backend will only process one job per poll call, so we need to keep polling
       const { data, error } = await supabase.functions.invoke('get-discovery-session', {
-        body: { sessionId, processNextJob: isFirstPoll },
+        body: { sessionId, processNextJob: true },
       });
 
       if (error) {
