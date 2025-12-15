@@ -6,6 +6,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Number of jobs to process in parallel per poll
+const MAX_PARALLEL_JOBS = 3;
+
+// Timeout for stuck jobs (2 minutes)
+const JOB_TIMEOUT_MS = 2 * 60 * 1000;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -68,50 +74,107 @@ serve(async (req) => {
     // Get jobs
     const { data: jobs } = await supabase
       .from('research_jobs')
-      .select('id, job_type, prospect_key, status, progress, error, created_at')
+      .select('id, job_type, prospect_key, status, progress, error, created_at, started_at')
       .eq('session_id', sessionId)
       .order('created_at', { ascending: true });
 
-    // Process next queued job if requested (poll-triggered execution)
+    // === FIX #3: Reset stuck jobs (running for more than 2 minutes) ===
+    const twoMinutesAgo = new Date(Date.now() - JOB_TIMEOUT_MS).toISOString();
+    const stuckJobs = jobs?.filter(j => 
+      j.status === 'running' && 
+      j.started_at && 
+      j.started_at < twoMinutesAgo
+    ) || [];
+
+    if (stuckJobs.length > 0) {
+      console.log(`Resetting ${stuckJobs.length} stuck jobs:`, stuckJobs.map(j => j.id));
+      
+      const stuckJobIds = stuckJobs.map(j => j.id);
+      await supabase
+        .from('research_jobs')
+        .update({ 
+          status: 'queued', 
+          started_at: null, 
+          error: 'Timeout - automatically retrying' 
+        })
+        .in('id', stuckJobIds);
+
+      // Update local jobs array to reflect the change
+      stuckJobs.forEach(stuckJob => {
+        const jobInArray = jobs?.find(j => j.id === stuckJob.id);
+        if (jobInArray) {
+          jobInArray.status = 'queued';
+          jobInArray.started_at = null;
+        }
+      });
+    }
+
+    // === FIX #1: Process multiple queued jobs in parallel ===
     if (processNextJob) {
-      const queuedJob = jobs?.find(j => j.status === 'queued');
-      if (queuedJob) {
-        console.log('Processing queued job:', queuedJob.id, queuedJob.job_type);
+      const queuedJobs = jobs?.filter(j => j.status === 'queued') || [];
+      const jobsToProcess = queuedJobs.slice(0, MAX_PARALLEL_JOBS);
+
+      if (jobsToProcess.length > 0) {
+        console.log(`Processing ${jobsToProcess.length} queued jobs in parallel:`, jobsToProcess.map(j => j.id));
         
-        // Mark job as running
+        // Mark all jobs as running first
+        const jobIds = jobsToProcess.map(j => j.id);
         await supabase
           .from('research_jobs')
           .update({ status: 'running', started_at: new Date().toISOString() })
-          .eq('id', queuedJob.id);
+          .in('id', jobIds);
 
-        // Trigger async dossier research (fire and forget via waitUntil pattern)
-        if (queuedJob.job_type === 'dossier' && queuedJob.prospect_key) {
-          // Get the prospect info
-          const prospect = dossiers?.find(d => d.prospect_key === queuedJob.prospect_key);
-          if (prospect) {
-            // Call research-prospect-dossier in background
+        // === FIX #2: Better error handling with fire-and-forget ===
+        // Fire off all dossier research requests in parallel
+        const dossierPromises = jobsToProcess
+          .filter(job => job.job_type === 'dossier' && job.prospect_key)
+          .map(async (queuedJob) => {
+            const prospect = dossiers?.find(d => d.prospect_key === queuedJob.prospect_key);
+            if (!prospect) {
+              console.error(`Prospect not found for job ${queuedJob.id}:`, queuedJob.prospect_key);
+              // Mark job as failed if prospect doesn't exist
+              await supabase
+                .from('research_jobs')
+                .update({ 
+                  status: 'failed', 
+                  error: 'Prospect not found',
+                  finished_at: new Date().toISOString()
+                })
+                .eq('id', queuedJob.id);
+              return;
+            }
+
             const dossierUrl = `${supabaseUrl}/functions/v1/research-prospect-dossier`;
             
-            // Fire and forget - don't await
-            fetch(dossierUrl, {
-              method: 'POST',
-              headers: {
-                ...(authHeader ? { 'Authorization': authHeader } : {}),
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                sessionId,
-                prospect: {
-                  name: prospect.prospect_name,
-                  state: prospect.prospect_state,
-                  lat: prospect.prospect_lat,
-                  lng: prospect.prospect_lng,
+            try {
+              // Fire and forget - but log errors
+              fetch(dossierUrl, {
+                method: 'POST',
+                headers: {
+                  ...(authHeader ? { 'Authorization': authHeader } : {}),
+                  'Content-Type': 'application/json',
                 },
-                jobId: queuedJob.id,
-              }),
-            }).catch(e => console.error('Background dossier fetch failed:', e));
-          }
-        }
+                body: JSON.stringify({
+                  sessionId,
+                  prospect: {
+                    name: prospect.prospect_name,
+                    state: prospect.prospect_state,
+                    lat: prospect.prospect_lat,
+                    lng: prospect.prospect_lng,
+                  },
+                  jobId: queuedJob.id,
+                }),
+              }).catch(async (e) => {
+                console.error(`Background dossier fetch failed for job ${queuedJob.id}:`, e);
+                // Don't mark as failed here - the timeout cleanup will handle truly stuck jobs
+              });
+            } catch (e) {
+              console.error(`Error starting dossier research for job ${queuedJob.id}:`, e);
+            }
+          });
+
+        // Wait for all fire-and-forget calls to be initiated (not completed)
+        await Promise.all(dossierPromises);
       }
     }
 
