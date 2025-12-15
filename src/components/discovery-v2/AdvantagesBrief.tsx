@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { ChevronDown, ChevronUp, ExternalLink, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
@@ -140,7 +140,8 @@ interface AdvantageCardProps {
   onToggle: () => void;
 }
 
-function AdvantageCard({ advantage, isExpanded, onToggle }: AdvantageCardProps) {
+// Memoized advantage card to prevent re-renders when sibling cards change
+const AdvantageCard = memo(function AdvantageCard({ advantage, isExpanded, onToggle }: AdvantageCardProps) {
   return (
     <div className="px-5 py-4">
       <button
@@ -243,4 +244,13 @@ function AdvantageCard({ advantage, isExpanded, onToggle }: AdvantageCardProps) 
       )}
     </div>
   );
-}
+});
+
+// Memoized export to prevent re-renders from parent polling updates
+export const AdvantagesBriefMemo = memo(AdvantagesBrief, (prevProps, nextProps) => {
+  return (
+    prevProps.sessionId === nextProps.sessionId &&
+    prevProps.brief.lastUpdated === nextProps.brief.lastUpdated &&
+    prevProps.brief.advantages.length === nextProps.brief.advantages.length
+  );
+});

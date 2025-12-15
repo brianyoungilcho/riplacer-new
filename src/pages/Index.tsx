@@ -1,9 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowRight, Crosshair, ChevronRight } from 'lucide-react';
+
+// Preload the onboarding page when user hovers over CTA buttons
+// This makes navigation feel instant
+const preloadOnboarding = () => {
+  import('./OnboardingV2');
+};
 
 function LandingPage() {
   return (
@@ -23,7 +29,7 @@ function LandingPage() {
                 Sign In
               </Button>
             </Link>
-            <Link to="/start">
+            <Link to="/start" onMouseEnter={preloadOnboarding}>
               <Button variant="glow" size="lg">
                 Get Started
                 <ArrowRight className="w-4 h-4" />
@@ -65,7 +71,7 @@ function LandingPage() {
             </p>
             
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <Link to="/start">
+              <Link to="/start" onMouseEnter={preloadOnboarding}>
                 <Button variant="glow" size="xl" className="text-lg">
                   Start Ripping
                   <ArrowRight className="w-5 h-5" />
@@ -181,7 +187,7 @@ function LandingPage() {
             <p className="text-xl text-gray-400 mb-10">
               Your competitors are getting comfortable. Make them uncomfortable.
             </p>
-            <Link to="/start">
+            <Link to="/start" onMouseEnter={preloadOnboarding}>
               <Button variant="glow" size="xl" className="text-lg">
                 Get Started Free
                 <ArrowRight className="w-5 h-5" />

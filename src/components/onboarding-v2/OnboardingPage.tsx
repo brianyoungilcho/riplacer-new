@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -70,6 +70,33 @@ export function OnboardingPage() {
   // Track previous step and product description to detect when user goes back to modify product
   const prevStepRef = useRef<number>(1);
   const prevProductDescriptionRef = useRef<string>('');
+
+  // Memoized criteria object to prevent unnecessary re-renders in DiscoveryV2Tab
+  const discoveryCriteria = useMemo(() => ({
+    productDescription: data.productDescription,
+    companyDomain: data.companyDomain,
+    territory: { states: data.states, cities: data.cities },
+    targetCategories: data.targetCategories,
+    competitors: data.competitors,
+  }), [data.productDescription, data.companyDomain, data.states, data.cities, data.targetCategories, data.competitors]);
+
+  // Memoized callback for prospect selection from discovery tab
+  const handleProspectSelect = useCallback((p: DiscoveryProspect | null) => {
+    setSelectedProspectId(p?.prospectId || null);
+  }, []);
+
+  // Memoized callback for prospects change (updates map markers)
+  const handleProspectsChange = useCallback((prospects: DiscoveryProspect[]) => {
+    // Convert v2 prospects to map-compatible format
+    const mapped = prospects.map(p => ({
+      id: p.prospectId,
+      name: p.name,
+      score: p.dossier?.score || p.score || p.initialScore || 0,
+      lat: p.lat,
+      lng: p.lng,
+    }));
+    setMapProspects(mapped);
+  }, []);
 
   // Load saved progress from localStorage on mount
   useEffect(() => {
@@ -616,25 +643,9 @@ export function OnboardingPage() {
             <ResizablePanel defaultSize={50} minSize={30} className="flex flex-col relative z-10 min-w-0">
               {activeTab === 'discovery' && (
                 <DiscoveryV2Tab 
-                  criteria={{
-                    productDescription: data.productDescription,
-                    companyDomain: data.companyDomain,
-                    territory: { states: data.states, cities: data.cities },
-                    targetCategories: data.targetCategories,
-                    competitors: data.competitors,
-                  }}
-                  onProspectSelect={(p) => setSelectedProspectId(p?.prospectId || null)}
-                  onProspectsChange={(prospects) => {
-                    // Convert v2 prospects to map-compatible format
-                    const mapped = prospects.map(p => ({
-                      id: p.prospectId,
-                      name: p.name,
-                      score: p.dossier?.score || p.score || p.initialScore || 0, // Fallback chain for score
-                      lat: p.lat,
-                      lng: p.lng,
-                    }));
-                    setMapProspects(mapped);
-                  }}
+                  criteria={discoveryCriteria}
+                  onProspectSelect={handleProspectSelect}
+                  onProspectsChange={handleProspectsChange}
                   selectedProspectId={selectedProspectId}
                 />
               )}

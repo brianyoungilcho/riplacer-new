@@ -311,12 +311,29 @@ function DossierContent({ dossier, onGeneratePlan, isEnriching }: DossierContent
 // Memoize component to prevent unnecessary re-renders when parent updates
 export const ProspectDossierCardMemo = memo(ProspectDossierCard, (prevProps, nextProps) => {
   // Custom comparison function - only re-render if relevant props changed
+  // Using shallow comparison of key dossier fields instead of expensive JSON.stringify
+  const prevDossier = prevProps.prospect.dossier;
+  const nextDossier = nextProps.prospect.dossier;
+  
+  const dossierEqual = 
+    prevDossier === nextDossier || // Same reference (common case)
+    (
+      prevDossier?.score === nextDossier?.score &&
+      prevDossier?.summary === nextDossier?.summary &&
+      prevDossier?.lastUpdated === nextDossier?.lastUpdated &&
+      prevDossier?.incumbent?.vendor === nextDossier?.incumbent?.vendor &&
+      prevDossier?.stakeholders?.length === nextDossier?.stakeholders?.length &&
+      prevDossier?.recommendedAngles?.length === nextDossier?.recommendedAngles?.length
+    );
+  
   return (
     prevProps.prospect.prospectId === nextProps.prospect.prospectId &&
     prevProps.prospect.dossierStatus === nextProps.prospect.dossierStatus &&
     prevProps.prospect.researchStatus === nextProps.prospect.researchStatus &&
+    prevProps.prospect.score === nextProps.prospect.score &&
+    prevProps.prospect.initialScore === nextProps.prospect.initialScore &&
     prevProps.isExpanded === nextProps.isExpanded &&
     prevProps.showGeneratePlan === nextProps.showGeneratePlan &&
-    JSON.stringify(prevProps.prospect.dossier) === JSON.stringify(nextProps.prospect.dossier)
+    dossierEqual
   );
 });
