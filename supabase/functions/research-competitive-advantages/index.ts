@@ -6,6 +6,46 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Robust JSON extraction with multiple fallback strategies
+function extractBriefFromResponse(content: string): any {
+  // Strategy 1: Direct JSON object extraction
+  try {
+    const objMatch = content.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      return JSON.parse(objMatch[0]);
+    }
+  } catch (e) {
+    console.log('Strategy 1 (object match) failed:', e);
+  }
+
+  // Strategy 2: Look for code block with JSON
+  try {
+    const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
+      const jsonContent = codeBlockMatch[1].trim();
+      return JSON.parse(jsonContent);
+    }
+  } catch (e) {
+    console.log('Strategy 2 (code block) failed:', e);
+  }
+
+  // Strategy 3: Try to fix common JSON issues
+  try {
+    let fixed = content;
+    // Remove trailing commas before ] or }
+    fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
+    const objMatch = fixed.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      return JSON.parse(objMatch[0]);
+    }
+  } catch (e) {
+    console.log('Strategy 3 (fix trailing commas) failed:', e);
+  }
+
+  console.error('All JSON extraction strategies failed');
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -67,7 +107,7 @@ serve(async (req) => {
       .eq('session_id', sessionId)
       .maybeSingle();
 
-    if (existingBrief?.status === 'ready') {
+    if (existingBrief?.status === 'ready' && existingBrief.brief?.positioningSummary) {
       console.log('Returning existing advantage brief');
       return new Response(
         JSON.stringify({ brief: existingBrief.brief, cached: true }),
@@ -84,7 +124,7 @@ serve(async (req) => {
         status: 'researching',
       }, { onConflict: 'session_id' });
 
-    // Use Lovable AI to generate competitive advantages
+    // Use Lovable AI with tool calling for structured output
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
     if (!LOVABLE_API_KEY) {
@@ -94,30 +134,22 @@ serve(async (req) => {
       );
     }
 
-    const prompt = `You are a competitive intelligence analyst. Analyze the competitive landscape for:
+    const prompt = `Analyze competitive positioning for this B2B sales situation:
 
 PRODUCT/SERVICE: ${productDescription}
-${companyDomain ? `COMPANY WEBSITE: ${companyDomain}` : ''}
+${companyDomain ? `COMPANY: ${companyDomain}` : ''}
 TARGET BUYERS: ${targetCategories?.join(', ') || 'government and enterprise'}
 COMPETITORS: ${competitors?.join(', ') || 'various incumbents'}
 
 Create a Strategic Advantage Brief with:
+1. A 2-3 sentence positioning summary
+2. 3-5 key competitive advantages with:
+   - Why it matters to the buyer
+   - How we compare to each competitor
+   - Key talking points for sales reps
+   - Common objections and responses`;
 
-1. positioningSummary: 2-3 sentences on overall competitive positioning
-
-2. advantages: Array of 3-5 key competitive advantages, each with:
-   - title: Short advantage name (e.g., "Lower Total Cost of Ownership")
-   - whyItMattersToBuyer: Why this matters to the target buyer
-   - competitorComparisons: Array of comparisons to each competitor with:
-     - competitor: Competitor name
-     - claim: Specific, defensible claim about the advantage
-     - confidence: 0.0-1.0 confidence score
-     - citations: Array of {url, title, excerpt} for sources (use realistic placeholder URLs)
-   - talkTrackBullets: 3-4 key talking points for sales reps
-   - objectionsAndResponses: Array of {objection, response} pairs
-
-Return ONLY valid JSON matching this structure. No explanation text.`;
-
+    // Use tool calling for guaranteed structured output
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -127,15 +159,78 @@ Return ONLY valid JSON matching this structure. No explanation text.`;
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
         messages: [
-          { role: 'system', content: 'You are a competitive intelligence expert. Return only valid JSON.' },
+          { role: 'system', content: 'You are a competitive intelligence expert. Provide actionable sales positioning.' },
           { role: 'user', content: prompt }
         ],
+        tools: [{
+          type: 'function',
+          function: {
+            name: 'submit_advantage_brief',
+            description: 'Submit the competitive advantage brief',
+            parameters: {
+              type: 'object',
+              properties: {
+                positioningSummary: { 
+                  type: 'string', 
+                  description: '2-3 sentence overall competitive positioning' 
+                },
+                advantages: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      title: { type: 'string', description: 'Short advantage name' },
+                      whyItMattersToBuyer: { type: 'string', description: 'Why this matters to the target buyer' },
+                      competitorComparisons: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            competitor: { type: 'string' },
+                            claim: { type: 'string', description: 'Specific comparison claim' },
+                            confidence: { type: 'number', description: '0.0-1.0' }
+                          },
+                          required: ['competitor', 'claim', 'confidence']
+                        }
+                      },
+                      talkTrackBullets: { 
+                        type: 'array', 
+                        items: { type: 'string' },
+                        description: '3-4 key talking points'
+                      },
+                      objectionsAndResponses: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            objection: { type: 'string' },
+                            response: { type: 'string' }
+                          },
+                          required: ['objection', 'response']
+                        }
+                      }
+                    },
+                    required: ['title', 'whyItMattersToBuyer', 'competitorComparisons', 'talkTrackBullets']
+                  }
+                }
+              },
+              required: ['positioningSummary', 'advantages']
+            }
+          }
+        }],
+        tool_choice: { type: 'function', function: { name: 'submit_advantage_brief' } }
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('AI API error:', response.status, errorText);
+      
+      // Update brief to failed
+      await supabase
+        .from('advantage_briefs')
+        .update({ status: 'failed' })
+        .eq('session_id', sessionId);
       
       if (response.status === 429) {
         return new Response(
@@ -154,22 +249,43 @@ Return ONLY valid JSON matching this structure. No explanation text.`;
     }
 
     const data = await response.json();
-    const content = data.choices[0]?.message?.content || '{}';
     
-    // Parse JSON from response
-    let brief;
-    try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        brief = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error('No JSON found in response');
+    let brief: any = null;
+    
+    // Extract from tool call response
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    if (toolCall?.function?.arguments) {
+      try {
+        brief = JSON.parse(toolCall.function.arguments);
+        console.log(`Extracted brief with ${brief.advantages?.length || 0} advantages from tool call`);
+      } catch (e) {
+        console.error('Failed to parse tool call arguments:', e);
       }
-    } catch (e) {
-      console.error('Failed to parse AI response:', e);
+    }
+    
+    // Fallback to content parsing if tool call didn't work
+    if (!brief || !brief.positioningSummary) {
+      const content = data.choices?.[0]?.message?.content || '';
+      console.log('Falling back to content parsing, raw length:', content.length);
+      brief = extractBriefFromResponse(content);
+    }
+    
+    // Final fallback - create minimal valid brief
+    if (!brief || !brief.positioningSummary) {
+      console.error('Failed to extract brief, using fallback');
       brief = {
-        positioningSummary: 'Unable to generate positioning summary.',
-        advantages: [],
+        positioningSummary: `Competitive positioning for ${productDescription || 'your solution'} against ${competitors?.join(', ') || 'incumbent vendors'}.`,
+        advantages: [{
+          title: 'Needs Further Research',
+          whyItMattersToBuyer: 'Additional competitive analysis recommended.',
+          competitorComparisons: (competitors || []).map((c: string) => ({
+            competitor: c,
+            claim: 'Comparison pending further research',
+            confidence: 0.5
+          })),
+          talkTrackBullets: ['Schedule discovery call to understand current pain points'],
+          objectionsAndResponses: []
+        }]
       };
     }
 
@@ -177,7 +293,7 @@ Return ONLY valid JSON matching this structure. No explanation text.`;
     brief.lastUpdated = new Date().toISOString();
 
     // Save brief
-    await supabase
+    const { error: saveError } = await supabase
       .from('advantage_briefs')
       .upsert({
         session_id: sessionId,
@@ -187,9 +303,13 @@ Return ONLY valid JSON matching this structure. No explanation text.`;
         ) || [],
         status: 'ready',
       }, { onConflict: 'session_id' });
+    
+    if (saveError) {
+      console.error('Failed to save brief:', saveError);
+    }
 
     const latency = Date.now() - startTime;
-    console.log(`Advantage brief generated in ${latency}ms`);
+    console.log(`Advantage brief generated in ${latency}ms with ${brief.advantages?.length || 0} advantages`);
 
     return new Response(
       JSON.stringify({ brief, cached: false, latency }),
