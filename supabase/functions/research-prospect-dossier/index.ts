@@ -262,6 +262,78 @@ Be specific with evidence. Include actual vendor names, contract values, and dat
 
     console.log('Calling Perplexity API with sonar-pro model...');
     
+    // Build a strong JSON-enforcing system prompt
+    const systemPrompt = `You are a B2B sales intelligence analyst. Your task is to research organizations and return ONLY a valid JSON object - no markdown, no explanation, no code fences.
+
+CRITICAL: Your entire response must be a single valid JSON object starting with { and ending with }. Do not include any text before or after the JSON.
+
+Research the organization thoroughly and populate this exact JSON structure:
+{
+  "summary": "3-4 sentence executive summary explaining why this is a strong sales prospect",
+  "incumbent": {
+    "vendor": "Current vendor name (or 'Unknown' if not found)",
+    "product": "Specific product/solution they use",
+    "confidence": 0.7,
+    "contractDetails": "Any known contract details, values, or dates"
+  },
+  "contract": {
+    "estimatedAnnualValue": "$X/year estimate based on org size",
+    "estimatedExpiration": "Date or timeframe if known",
+    "procurementHistory": "Recent procurement activity or RFPs"
+  },
+  "stakeholders": [
+    {
+      "name": "Full Name",
+      "title": "Job Title",
+      "department": "Department",
+      "linkedinUrl": "URL if found",
+      "stance": "unknown",
+      "notes": "Relevant background"
+    }
+  ],
+  "organizationProfile": {
+    "size": "Employee count or sworn officers",
+    "annualBudget": "IT/tech budget if available",
+    "recentNews": ["Recent news item 1", "Recent news item 2"],
+    "techStack": ["Known tech vendor 1", "Known tech vendor 2"]
+  },
+  "macroSignals": [
+    {
+      "type": "budget|leadership|election|audit|rfp|expansion|modernization|compliance|other",
+      "description": "What is happening",
+      "timing": "When (e.g., Q2 2025)",
+      "impact": "high|medium|low"
+    }
+  ],
+  "painPoints": [
+    {
+      "pain": "Specific pain point",
+      "evidence": "How you know this",
+      "ourSolution": "How we address it"
+    }
+  ],
+  "recommendedAngles": [
+    {
+      "title": "Short angle name",
+      "message": "2-3 sentence sales pitch",
+      "whyNow": "Why this angle is timely",
+      "talkTrack": ["Talking point 1", "Talking point 2", "Talking point 3"]
+    }
+  ],
+  "anglesForList": ["Tag 1", "Tag 2"],
+  "score": 75,
+  "scoreBreakdown": {
+    "competitorMatch": 70,
+    "timingSignals": 80,
+    "budgetReadiness": 65,
+    "accessToDecisionMakers": 60
+  }
+}
+
+Fill in ALL fields with real research data. Use actual vendor names, real people, real numbers when available.
+For fields you cannot find data for, use reasonable estimates based on organization type and size.
+RESPOND ONLY WITH THE JSON OBJECT.`;
+
     const response = await fetch('https://api.perplexity.ai/chat/completions', {
       method: 'POST',
       headers: {
@@ -269,35 +341,13 @@ Be specific with evidence. Include actual vendor names, contract values, and dat
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'sonar-pro', // Multi-step reasoning with real citations
+        model: 'sonar-pro',
         messages: [
-          { 
-            role: 'system', 
-            content: `You are a B2B sales intelligence analyst specializing in government and enterprise procurement. 
-Research thoroughly using real data sources. Be specific with vendor names, contract details, and dates.
-Return your findings as a structured JSON object with these fields:
-- summary: 3-4 sentence executive summary
-- incumbent: { vendor, product, confidence, contractDetails }
-- contract: { estimatedAnnualValue, estimatedExpiration, procurementHistory }
-- stakeholders: [{ name, title, department, linkedinUrl, stance, notes }]
-- organizationProfile: { size, annualBudget, recentNews[], techStack[] }
-- macroSignals: [{ type, description, timing, impact }]
-- painPoints: [{ pain, evidence, ourSolution }]
-- recommendedAngles: [{ title, message, whyNow, talkTrack[] }]
-- anglesForList: ["short label 1", "short label 2"]
-- score: 0-100
-- scoreBreakdown: { competitorMatch, timingSignals, budgetReadiness, accessToDecisionMakers }`
-          },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: researchPrompt }
         ],
-        // Exclude unreliable sources only (don't restrict to specific domains - too limiting)
-        search_domain_filter: [
-          '-reddit.com',
-          '-twitter.com',
-          '-pinterest.com',
-          '-quora.com',
-        ],
-        search_recency_filter: 'year', // Focus on recent data
+        search_domain_filter: ['-reddit.com', '-twitter.com', '-pinterest.com', '-quora.com'],
+        search_recency_filter: 'year',
       }),
     });
 
@@ -337,46 +387,86 @@ Return your findings as a structured JSON object with these fields:
     const content = data.choices[0]?.message?.content || '{}';
     const citations = data.citations || [];
     
-    console.log(`Perplexity returned ${citations.length} citations:`, JSON.stringify(citations.slice(0, 3)));
+    console.log(`Perplexity returned ${citations.length} citations`);
+    console.log('Raw content length:', content.length);
+    console.log('Content preview:', content.substring(0, 300));
 
     let dossier;
+    let parseAttempt = '';
+    
     try {
-      // Extract JSON from response
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        dossier = JSON.parse(jsonMatch[0]);
-      } else {
-        // Try to parse the entire content as JSON
-        dossier = JSON.parse(content);
+      // Attempt 1: Try parsing the entire content directly (ideal case)
+      parseAttempt = 'direct';
+      dossier = JSON.parse(content);
+      console.log('Successfully parsed JSON directly');
+    } catch (e1) {
+      try {
+        // Attempt 2: Extract JSON from markdown code blocks
+        parseAttempt = 'code-block';
+        const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (codeBlockMatch) {
+          dossier = JSON.parse(codeBlockMatch[1].trim());
+          console.log('Successfully parsed JSON from code block');
+        } else {
+          throw new Error('No code block found');
+        }
+      } catch (e2) {
+        try {
+          // Attempt 3: Extract JSON object with regex (greedy match)
+          parseAttempt = 'regex';
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            dossier = JSON.parse(jsonMatch[0]);
+            console.log('Successfully parsed JSON via regex extraction');
+          } else {
+            throw new Error('No JSON object found in content');
+          }
+        } catch (e3) {
+          // All parsing failed - create a detailed fallback
+          console.error('All JSON parsing attempts failed');
+          console.error('Parse attempt:', parseAttempt);
+          console.error('Raw content (first 1000 chars):', content.substring(0, 1000));
+          
+          // Extract any useful information from the text response
+          const textSummary = content
+            .replace(/```[\s\S]*?```/g, '') // Remove code blocks
+            .replace(/\*\*/g, '')            // Remove bold markers
+            .replace(/\n+/g, ' ')            // Normalize newlines
+            .trim()
+            .substring(0, 500);
+          
+          dossier = {
+            summary: textSummary || `Research completed for ${prospect.name}. Manual review recommended.`,
+            incumbent: { vendor: 'Unknown', confidence: 0.3, contractDetails: 'Unable to determine from available sources' },
+            contract: { estimatedAnnualValue: 'Unknown', estimatedExpiration: 'Unknown' },
+            stakeholders: [],
+            organizationProfile: { size: 'Unknown', recentNews: [], techStack: [] },
+            macroSignals: [],
+            painPoints: [],
+            recommendedAngles: [{
+              title: 'Discovery Call',
+              message: `Schedule a discovery call with ${prospect.name} to understand their current technology landscape and pain points.`,
+              whyNow: 'Establish relationship and gather intelligence for targeted pitch.',
+              talkTrack: [
+                'Introduce your solution and value proposition',
+                'Ask about current vendors and satisfaction levels',
+                'Identify budget cycles and decision-making process',
+                'Determine key stakeholders and timeline'
+              ],
+            }],
+            anglesForList: ['Research needed', 'Discovery call'],
+            score: 55,
+            scoreBreakdown: {
+              competitorMatch: 50,
+              timingSignals: 50,
+              budgetReadiness: 60,
+              accessToDecisionMakers: 50,
+            },
+            _parseError: true,
+            _rawContentPreview: content.substring(0, 200),
+          };
+        }
       }
-    } catch (e) {
-      console.error('Failed to parse dossier JSON:', e);
-      console.log('Raw content:', content.substring(0, 500));
-      
-      // Create a structured dossier from the text response
-      dossier = {
-        summary: content.substring(0, 500) || 'Research completed with limited findings.',
-        incumbent: { vendor: 'Unknown', confidence: 0.3 },
-        contract: {},
-        stakeholders: [],
-        organizationProfile: {},
-        macroSignals: [],
-        painPoints: [],
-        recommendedAngles: [{
-          title: 'Initial Outreach',
-          message: 'Based on our research, this organization shows potential for our solution. Further discovery call recommended.',
-          whyNow: 'Needs additional research to identify specific timing.',
-          talkTrack: ['Introduction call to understand current technology landscape'],
-        }],
-        anglesForList: ['Needs discovery'],
-        score: 50,
-        scoreBreakdown: {
-          competitorMatch: 50,
-          timingSignals: 50,
-          budgetReadiness: 50,
-          accessToDecisionMakers: 50,
-        },
-      };
     }
 
     // Enrich with metadata and citations
