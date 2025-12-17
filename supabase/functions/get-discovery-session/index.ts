@@ -90,16 +90,28 @@ serve(async (req) => {
     // Track jobs that need updating (batch updates at end)
     const jobUpdates: { ids: string[]; update: Record<string, any> }[] = [];
 
-    // Reset stuck jobs (running for more than 2 minutes)
+    // Reset stuck jobs - either running for too long OR running without progress
     const twoMinutesAgo = new Date(Date.now() - JOB_TIMEOUT_MS).toISOString();
-    const stuckJobs = jobs?.filter(j => 
-      j.status === 'running' && 
-      j.started_at && 
-      j.started_at < twoMinutesAgo
-    ) || [];
+    const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
+    
+    const stuckJobs = jobs?.filter(j => {
+      // Case 1: Running for more than 2 minutes (definitely stuck)
+      if (j.status === 'running' && j.started_at && j.started_at < twoMinutesAgo) {
+        return true;
+      }
+      // Case 2: Marked as running but started_at is null (never actually started)
+      if (j.status === 'running' && !j.started_at) {
+        return true;
+      }
+      // Case 3: Running for 30+ seconds with no progress (likely fire-and-forget failed)
+      if (j.status === 'running' && j.started_at && j.started_at < thirtySecondsAgo && (!j.progress || j.progress === 0)) {
+        return true;
+      }
+      return false;
+    }) || [];
 
     if (stuckJobs.length > 0) {
-      console.log(`Resetting ${stuckJobs.length} stuck jobs:`, stuckJobs.map(j => j.id));
+      console.log(`Resetting ${stuckJobs.length} stuck jobs:`, stuckJobs.map(j => ({ id: j.id, started_at: j.started_at, progress: j.progress })));
       
       jobUpdates.push({
         ids: stuckJobs.map(j => j.id),
