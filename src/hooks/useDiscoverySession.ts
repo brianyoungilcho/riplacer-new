@@ -56,6 +56,7 @@ export interface Citation {
   url: string;
   title?: string;
   excerpt?: string;
+  publishedDate?: string;
 }
 
 export interface Stakeholder {
@@ -388,8 +389,8 @@ export function useDiscoverySession() {
     }
   }, []);
 
-  // Clear session state
-  const clearSession = useCallback(() => {
+  // Clear session state (only in-memory, keeps localStorage for restoration)
+  const clearSession = useCallback((clearLocalStorage = false) => {
     setSessionState({
       session: null,
       advantageBrief: null,
@@ -400,17 +401,18 @@ export function useDiscoverySession() {
     });
     setError(null);
     
-    // Clear all discovery session entries from localStorage
-    // This is a cleanup operation, so we clear all to be safe
-    try {
-      const keys = Object.keys(localStorage);
-      keys.forEach(key => {
-        if (key.startsWith('riplacer_discovery_session_')) {
-          localStorage.removeItem(key);
-        }
-      });
-    } catch (err) {
-      console.error('Failed to clear localStorage sessions:', err);
+    // Only clear localStorage if explicitly requested
+    if (clearLocalStorage) {
+      try {
+        const keys = Object.keys(localStorage);
+        keys.forEach(key => {
+          if (key.startsWith('riplacer_discovery_session_')) {
+            localStorage.removeItem(key);
+          }
+        });
+      } catch (err) {
+        console.error('Failed to clear localStorage sessions:', err);
+      }
     }
   }, []);
 

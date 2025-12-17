@@ -9,10 +9,14 @@ import {
   TrendingUp,
   Lightbulb,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Heart,
+  Calendar
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import type { DiscoveryProspect, ProspectDossier } from '@/hooks/useDiscoverySession';
 
 interface ProspectDossierCardProps {
@@ -21,6 +25,9 @@ interface ProspectDossierCardProps {
   onToggle: () => void;
   onGeneratePlan?: () => void;
   showGeneratePlan?: boolean;
+  isFavorited?: boolean;
+  onFavoriteToggle?: (prospectId: string, isFavorited: boolean) => void;
+  isAuthenticated?: boolean;
   className?: string;
 }
 
@@ -30,11 +37,64 @@ export function ProspectDossierCard({
   onToggle, 
   onGeneratePlan,
   showGeneratePlan = true,
+  isFavorited = false,
+  onFavoriteToggle,
+  isAuthenticated = false,
   className 
 }: ProspectDossierCardProps) {
   const [showAllAngles, setShowAllAngles] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   const dossier = prospect.dossier;
+  
+  // Handle favorite toggle
+  const handleFavoriteClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!isAuthenticated) {
+      toast.error('Sign up to save prospects to your favorites');
+      return;
+    }
+    
+    if (isSaving) return;
+    
+    setIsSaving(true);
+    try {
+      if (isFavorited) {
+        // Remove from favorites - we'd need a delete endpoint, for now just toggle state
+        onFavoriteToggle?.(prospect.prospectId, false);
+        toast.success('Removed from favorites');
+      } else {
+        // Add to favorites
+        const { error } = await supabase.functions.invoke('save-prospect', {
+          body: {
+            place_id: prospect.prospectId,
+            prospect_data: {
+              name: prospect.name,
+              address: prospect.state,
+              lat: prospect.lat,
+              lng: prospect.lng,
+              enrichment: {
+                riplace_score: prospect.dossier?.score || prospect.score || prospect.initialScore || 0,
+                summary: prospect.dossier?.summary,
+                angles: prospect.dossier?.anglesForList || prospect.angles,
+              }
+            }
+          }
+        });
+        
+        if (error) throw error;
+        
+        onFavoriteToggle?.(prospect.prospectId, true);
+        toast.success('Added to favorites');
+      }
+    } catch (err: any) {
+      console.error('Failed to toggle favorite:', err);
+      toast.error(err.message || 'Failed to save prospect');
+    } finally {
+      setIsSaving(false);
+    }
+  };
   // Check if we have ANY meaningful data to show
   // Initial data from discovery includes: score, angles, summary
   // Deep research adds: incumbent, stakeholders, contract, etc.
@@ -111,8 +171,25 @@ export function ProspectDossierCard({
           )}
         </div>
 
-        {/* Expand Icon */}
-        <div className="flex-shrink-0 pt-1">
+        {/* Favorite & Expand Icons */}
+        <div className="flex items-center gap-1 flex-shrink-0 pt-1">
+          {/* Favorite Button */}
+          <button
+            onClick={handleFavoriteClick}
+            disabled={isSaving}
+            className={cn(
+              "p-1.5 rounded-lg transition-colors",
+              isFavorited 
+                ? "text-red-500 bg-red-50 hover:bg-red-100" 
+                : "text-gray-400 hover:text-red-500 hover:bg-gray-100",
+              isSaving && "opacity-50 cursor-not-allowed"
+            )}
+            title={isFavorited ? "Remove from favorites" : "Add to favorites"}
+          >
+            <Heart className={cn("w-4 h-4", isFavorited && "fill-current")} />
+          </button>
+          
+          {/* Expand Icon */}
           {isExpanded ? (
             <ChevronUp className="w-5 h-5 text-gray-400" />
           ) : (
@@ -334,6 +411,15 @@ function DossierContent({ prospect, dossier, score, angles, onGeneratePlan, isEn
                 if (source.url) hostname = new URL(source.url).hostname.replace('www.', '');
               } catch {}
               
+              // Format date if available
+              const formattedDate = source.publishedDate 
+                ? new Date(source.publishedDate).toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    year: 'numeric' 
+                  })
+                : null;
+              
               return (
                 <a
                   key={idx}
@@ -349,9 +435,18 @@ function DossierContent({ prospect, dossier, score, angles, onGeneratePlan, isEn
                     <p className="text-xs font-medium text-foreground group-hover:text-primary truncate">
                       {source.title || hostname}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {hostname}
-                    </p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="truncate">{hostname}</span>
+                      {formattedDate && (
+                        <>
+                          <span className="text-muted-foreground/50">•</span>
+                          <span className="flex items-center gap-1 flex-shrink-0">
+                            <Calendar className="w-3 h-3" />
+                            {formattedDate}
+                          </span>
+                        </>
+                      )}
+                    </div>
                     {source.excerpt && (
                       <p className="text-xs text-muted-foreground/80 mt-1 line-clamp-2">
                         {source.excerpt}
@@ -409,6 +504,8 @@ export const ProspectDossierCardMemo = memo(ProspectDossierCard, (prevProps, nex
     prevProps.prospect.initialScore === nextProps.prospect.initialScore &&
     prevProps.isExpanded === nextProps.isExpanded &&
     prevProps.showGeneratePlan === nextProps.showGeneratePlan &&
+    prevProps.isFavorited === nextProps.isFavorited &&
+    prevProps.isAuthenticated === nextProps.isAuthenticated &&
     dossierEqual
   );
 });

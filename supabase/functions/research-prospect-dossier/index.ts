@@ -474,11 +474,26 @@ RESPOND ONLY WITH THE JSON OBJECT.`;
     dossier.researchMethod = 'perplexity-sonar-pro';
     
     // Transform Perplexity citations to our format
-    dossier.sources = citations.map((url: string, idx: number) => ({
-      url,
-      title: `Source ${idx + 1}`,
-      excerpt: 'Retrieved via Perplexity AI research',
-    }));
+    // Perplexity returns citations as URLs or objects with metadata
+    dossier.sources = citations.map((citation: string | { url?: string; title?: string; publishedDate?: string; snippet?: string }, idx: number) => {
+      // Handle both string URLs and object citations
+      if (typeof citation === 'string') {
+        let hostname = 'Source';
+        try { hostname = new URL(citation).hostname.replace('www.', ''); } catch {}
+        return {
+          url: citation,
+          title: hostname,
+          excerpt: 'Retrieved via Perplexity AI research',
+        };
+      }
+      // Object format with potential metadata
+      return {
+        url: citation.url || '',
+        title: citation.title || `Source ${idx + 1}`,
+        excerpt: citation.snippet || 'Retrieved via Perplexity AI research',
+        publishedDate: citation.publishedDate || null,
+      };
+    });
 
     // Ensure required fields exist
     if (!dossier.anglesForList || dossier.anglesForList.length === 0) {
