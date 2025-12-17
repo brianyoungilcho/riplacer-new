@@ -67,6 +67,7 @@ export function useDiscoveryPolling({
   const isCompleteRef = useRef(false);
   const isTabVisibleRef = useRef(true);
   const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const sessionStartTimeRef = useRef<number>(Date.now());
   const lastStateRef = useRef<{ progress: number; hasRunningJobs: boolean }>({
     progress: 0,
     hasRunningJobs: true,
@@ -147,26 +148,54 @@ export function useDiscoveryPolling({
 
       onUpdateRef.current?.(state);
 
-      // Check if any jobs are still running
+      // Check if any jobs are still running OR pending
       const hasRunningJobs = state.jobs.some(
         j => j.status === 'queued' || j.status === 'running'
+      );
+      
+      // Check if any dossiers are still pending research
+      const hasPendingDossiers = state.prospects.some(
+        p => p.dossierStatus === 'queued' || p.dossierStatus === 'researching'
       );
       
       // Update state refs for next interval calculation
       lastStateRef.current = {
         progress: state.progress,
-        hasRunningJobs,
+        hasRunningJobs: hasRunningJobs || hasPendingDossiers,
       };
 
+      // Warm-up period: keep polling for at least 30 seconds after session start
+      // This handles the race condition where jobs are created after the first poll
+      const timeSinceStart = Date.now() - sessionStartTimeRef.current;
+      const inWarmUpPeriod = timeSinceStart < 30000; // 30 seconds
+
       // Check if all research is complete
-      const allJobsComplete = state.jobs.every(
+      // IMPORTANT: Only consider complete if we have jobs AND they're all done
+      // Empty jobs array does NOT mean complete (jobs may not be created yet)
+      const hasJobs = state.jobs.length > 0;
+      const allJobsComplete = hasJobs && state.jobs.every(
         j => j.status === 'complete' || j.status === 'failed'
       );
-      const allDossiersReady = state.prospects.every(
+      const allDossiersReady = state.prospects.length > 0 && state.prospects.every(
         p => p.dossierStatus === 'ready' || p.dossierStatus === 'failed'
       );
 
-      if (state.progress >= 100 || (allJobsComplete && allDossiersReady && state.prospects.length > 0)) {
+      // Only mark as complete if:
+      // 1. We're past the warm-up period AND
+      // 2. Either progress is 100% OR (all jobs done AND all dossiers ready)
+      const isActuallyComplete = !inWarmUpPeriod && (
+        state.progress >= 100 || 
+        (allJobsComplete && allDossiersReady && state.prospects.length > 0)
+      );
+
+      if (isActuallyComplete) {
+        console.log('[Polling] Research complete:', { 
+          progress: state.progress, 
+          jobsCount: state.jobs.length,
+          allJobsComplete, 
+          allDossiersReady,
+          timeSinceStart: Math.round(timeSinceStart / 1000) + 's'
+        });
         isCompleteRef.current = true;
         setIsPolling(false);
         onCompleteRef.current?.();
@@ -183,7 +212,9 @@ export function useDiscoveryPolling({
         }
       } else {
         // Schedule next poll with adaptive interval
-        scheduleNextPoll(state.progress, hasRunningJobs);
+        // If in warm-up or has pending work, poll more frequently
+        const effectiveHasRunning = hasRunningJobs || hasPendingDossiers || inWarmUpPeriod;
+        scheduleNextPoll(state.progress, effectiveHasRunning);
       }
     } catch (err) {
       console.error('Polling failed:', err);
@@ -255,7 +286,10 @@ export function useDiscoveryPolling({
     isCompleteRef.current = false;
     setIsPolling(true);
     setPollCount(0);
+    sessionStartTimeRef.current = Date.now(); // Reset warm-up timer
     lastStateRef.current = { progress: 0, hasRunningJobs: true };
+
+    console.log('[Polling] Starting polling for session:', sessionId);
 
     // Initial poll immediately
     poll();
