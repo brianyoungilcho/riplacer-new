@@ -41,6 +41,22 @@ export function DiscoveryV2Tab({
   const [accountPlan, setAccountPlan] = useState<{ plan: AccountPlan; prospectName: string } | null>(null);
   const hasStartedRef = useRef(false);
   
+  // Favorites state - track which prospects are favorited
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  
+  // Handle favorite toggle
+  const handleFavoriteToggle = useCallback((prospectId: string, isFavorited: boolean) => {
+    setFavorites(prev => {
+      const next = new Set(prev);
+      if (isFavorited) {
+        next.add(prospectId);
+      } else {
+        next.delete(prospectId);
+      }
+      return next;
+    });
+  }, []);
+  
   // Search, Sort, and Filter state
   const [searchQuery, setSearchQuery] = useState('');
   // Use deferred value for search to debounce filtering (React 18+)
@@ -90,19 +106,24 @@ export function DiscoveryV2Tab({
 
   // Auto-start discovery when component mounts with valid criteria
   const startDiscovery = useCallback(async () => {
-    // Clear previous state
-    clearSession();
-
-    // Create session
+    // Try to restore existing session first (createSession handles this internally)
     const sessionId = await createSession(criteria);
     if (!sessionId) return;
 
-    // Start parallel research
+    // Check if we already have prospects (session was restored)
+    // If so, just fetch latest state - don't re-discover
+    const sessionData = await fetchSession(sessionId, true);
+    if (sessionData?.prospects?.length > 0) {
+      console.log('[Discovery] Restored existing session with', sessionData.prospects.length, 'prospects');
+      return;
+    }
+
+    // New session - start parallel research
     await Promise.all([
       discoverProspects(sessionId, criteria),
       researchAdvantages(sessionId, criteria),
     ]);
-  }, [criteria, clearSession, createSession, discoverProspects, researchAdvantages]);
+  }, [criteria, createSession, fetchSession, discoverProspects, researchAdvantages]);
 
   // Auto-start on mount if criteria is valid and hasn't started yet
   useEffect(() => {
@@ -539,6 +560,9 @@ export function DiscoveryV2Tab({
                     onToggle={() => handleProspectToggle(prospect, false)}
                     onGeneratePlan={() => handleGeneratePlan(prospect.prospectId, prospect.name)}
                     showGeneratePlan={!!user}
+                    isFavorited={favorites.has(prospect.prospectId)}
+                    onFavoriteToggle={handleFavoriteToggle}
+                    isAuthenticated={!!user}
                   />
                 </div>
               ))}
