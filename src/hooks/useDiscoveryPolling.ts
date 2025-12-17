@@ -5,50 +5,30 @@ import type { DiscoverySessionState } from './useDiscoverySession';
 interface UseDiscoveryPollingOptions {
   sessionId: string | null;
   enabled?: boolean;
-  /**
-   * Called with the latest session state from the server.
-   * Use this to update your local state.
-   */
   onUpdate?: (state: DiscoverySessionState) => void;
   onComplete?: () => void;
-  /**
-   * Optional: pass fetchSession from useDiscoverySession to update state directly.
-   * If provided, this will be called instead of fetching via supabase.functions.invoke.
-   */
   fetchSession?: (sessionId: string, processNextJob?: boolean) => Promise<any>;
-  /**
-   * Enable realtime subscriptions for more responsive updates.
-   * Falls back to polling if realtime is not available.
-   */
   useRealtime?: boolean;
 }
 
-// Adaptive polling intervals based on activity state
+// Adaptive polling intervals
 const POLLING_INTERVALS = {
-  ACTIVE: 3000,      // 3s when jobs are running - user is actively waiting
-  EARLY: 5000,       // 5s in early stage (< 50% progress)
-  LATE: 10000,       // 10s when mostly complete (50-99%)
+  ACTIVE: 3000,      // 3s when jobs are running
+  EARLY: 5000,       // 5s in early stage
+  LATE: 10000,       // 10s when mostly complete
   BACKGROUND: 30000, // 30s when tab is hidden
-  REALTIME: 15000,   // 15s when using realtime (as fallback/refresh)
+  REALTIME: 15000,   // 15s when using realtime
 } as const;
 
-// Calculate optimal polling interval based on current state
 function getAdaptiveInterval(
   progress: number,
   hasRunningJobs: boolean,
   isTabVisible: boolean,
   useRealtime: boolean
 ): number {
-  // When using realtime, poll less frequently (just for sync/refresh)
   if (useRealtime && isTabVisible) return POLLING_INTERVALS.REALTIME;
-  
-  // When tab is hidden, poll very slowly to save resources
   if (!isTabVisible) return POLLING_INTERVALS.BACKGROUND;
-  
-  // When jobs are actively running, poll frequently
   if (hasRunningJobs) return POLLING_INTERVALS.ACTIVE;
-  
-  // Scale based on progress
   if (progress < 50) return POLLING_INTERVALS.EARLY;
   return POLLING_INTERVALS.LATE;
 }
@@ -73,63 +53,78 @@ export function useDiscoveryPolling({
     hasRunningJobs: true,
   });
   
-  // Use refs for callbacks to prevent unnecessary recreation
+  // CRITICAL: Use refs for callbacks AND for poll function to avoid stale closures
   const onUpdateRef = useRef(onUpdate);
   const onCompleteRef = useRef(onComplete);
+  const fetchSessionRef = useRef(fetchSession);
+  const sessionIdRef = useRef(sessionId);
+  const useRealtimeRef = useRef(useRealtime);
 
-  // Update refs when callbacks change
+  // Update refs when values change
   useEffect(() => {
     onUpdateRef.current = onUpdate;
     onCompleteRef.current = onComplete;
-  }, [onUpdate, onComplete]);
+    fetchSessionRef.current = fetchSession;
+    sessionIdRef.current = sessionId;
+    useRealtimeRef.current = useRealtime;
+  }, [onUpdate, onComplete, fetchSession, sessionId, useRealtime]);
 
-  // Track tab visibility for adaptive polling
+  // Track tab visibility
   useEffect(() => {
     const handleVisibilityChange = () => {
       isTabVisibleRef.current = document.visibilityState === 'visible';
     };
-    
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
+  // Schedule next poll - uses refs to always get current values
   const scheduleNextPoll = useCallback((progress: number, hasRunningJobs: boolean) => {
     if (isCompleteRef.current) return;
     
-    const interval = getAdaptiveInterval(progress, hasRunningJobs, isTabVisibleRef.current, useRealtime);
+    const interval = getAdaptiveInterval(progress, hasRunningJobs, isTabVisibleRef.current, useRealtimeRef.current);
     
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
     
+    console.log(`[Polling] Scheduling next poll in ${interval}ms (progress: ${progress}%, running: ${hasRunningJobs})`);
+    
     timeoutRef.current = setTimeout(() => {
-      poll();
+      // CRITICAL FIX: Call pollRef.current() instead of poll() to avoid stale closure
+      pollRef.current();
     }, interval);
-  }, [useRealtime]);
+  }, []); // No dependencies - uses refs internally
 
-  const poll = useCallback(async () => {
-    if (!sessionId || isCompleteRef.current) return;
+  // The actual poll function
+  const doPoll = useCallback(async () => {
+    const currentSessionId = sessionIdRef.current;
+    if (!currentSessionId || isCompleteRef.current) {
+      console.log('[Polling] Skipping poll - no sessionId or complete');
+      return;
+    }
+
+    console.log(`[Polling] Poll #${pollCount + 1} for session:`, currentSessionId);
 
     try {
       let data: any;
+      const currentFetchSession = fetchSessionRef.current;
       
-      // Use fetchSession if provided (updates state directly in useDiscoverySession)
-      if (fetchSession) {
-        data = await fetchSession(sessionId, true);
+      if (currentFetchSession) {
+        data = await currentFetchSession(currentSessionId, true);
         if (!data) {
-          console.error('Polling: fetchSession returned no data');
-          scheduleNextPoll(lastStateRef.current.progress, false);
+          console.error('[Polling] fetchSession returned no data');
+          scheduleNextPoll(lastStateRef.current.progress, true);
           return;
         }
       } else {
-        // Fallback: call edge function directly
         const result = await supabase.functions.invoke('get-discovery-session', {
-          body: { sessionId, processNextJob: true },
+          body: { sessionId: currentSessionId, processNextJob: true },
         });
         
         if (result.error) {
-          console.error('Polling error:', result.error);
-          scheduleNextPoll(lastStateRef.current.progress, false);
+          console.error('[Polling] Error:', result.error);
+          scheduleNextPoll(lastStateRef.current.progress, true);
           return;
         }
         data = result.data;
@@ -148,17 +143,10 @@ export function useDiscoveryPolling({
 
       onUpdateRef.current?.(state);
 
-      // Check if any jobs are still running OR pending
-      const hasRunningJobs = state.jobs.some(
-        j => j.status === 'queued' || j.status === 'running'
-      );
+      // Check status
+      const hasRunningJobs = state.jobs.some(j => j.status === 'queued' || j.status === 'running');
+      const hasPendingDossiers = state.prospects.some(p => p.dossierStatus === 'queued' || p.dossierStatus === 'researching');
       
-      // Check if any dossiers are still pending research
-      const hasPendingDossiers = state.prospects.some(
-        p => p.dossierStatus === 'queued' || p.dossierStatus === 'researching'
-      );
-      
-      // Update state refs for next interval calculation
       lastStateRef.current = {
         progress: state.progress,
         hasRunningJobs: hasRunningJobs || hasPendingDossiers,
@@ -167,35 +155,30 @@ export function useDiscoveryPolling({
       // Warm-up period: keep polling for at least 30 seconds after session start
       // This handles the race condition where jobs are created after the first poll
       const timeSinceStart = Date.now() - sessionStartTimeRef.current;
-      const inWarmUpPeriod = timeSinceStart < 30000; // 30 seconds
+      const inWarmUpPeriod = timeSinceStart < 45000;
 
-      // Check if all research is complete
-      // IMPORTANT: Only consider complete if we have jobs AND they're all done
-      // Empty jobs array does NOT mean complete (jobs may not be created yet)
+      // Completion check - only complete if we have jobs AND they're all done
       const hasJobs = state.jobs.length > 0;
-      const allJobsComplete = hasJobs && state.jobs.every(
-        j => j.status === 'complete' || j.status === 'failed'
-      );
-      const allDossiersReady = state.prospects.length > 0 && state.prospects.every(
-        p => p.dossierStatus === 'ready' || p.dossierStatus === 'failed'
-      );
+      const allJobsComplete = hasJobs && state.jobs.every(j => j.status === 'complete' || j.status === 'failed');
+      const allDossiersReady = state.prospects.length > 0 && state.prospects.every(p => p.dossierStatus === 'ready' || p.dossierStatus === 'failed');
 
-      // Only mark as complete if:
-      // 1. We're past the warm-up period AND
-      // 2. Either progress is 100% OR (all jobs done AND all dossiers ready)
       const isActuallyComplete = !inWarmUpPeriod && (
         state.progress >= 100 || 
         (allJobsComplete && allDossiersReady && state.prospects.length > 0)
       );
 
+      console.log('[Polling] State:', {
+        jobs: state.jobs.length,
+        queued: state.jobs.filter(j => j.status === 'queued').length,
+        running: state.jobs.filter(j => j.status === 'running').length,
+        complete: state.jobs.filter(j => j.status === 'complete').length,
+        pendingDossiers: state.prospects.filter(p => p.dossierStatus === 'queued' || p.dossierStatus === 'researching').length,
+        warmUp: inWarmUpPeriod,
+        timeSinceStart: Math.round(timeSinceStart / 1000) + 's',
+      });
+
       if (isActuallyComplete) {
-        console.log('[Polling] Research complete:', { 
-          progress: state.progress, 
-          jobsCount: state.jobs.length,
-          allJobsComplete, 
-          allDossiersReady,
-          timeSinceStart: Math.round(timeSinceStart / 1000) + 's'
-        });
+        console.log('[Polling] Research complete!');
         isCompleteRef.current = true;
         setIsPolling(false);
         onCompleteRef.current?.();
@@ -204,8 +187,6 @@ export function useDiscoveryPolling({
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
-        
-        // Cleanup realtime channel
         if (realtimeChannelRef.current) {
           supabase.removeChannel(realtimeChannelRef.current);
           realtimeChannelRef.current = null;
@@ -217,13 +198,23 @@ export function useDiscoveryPolling({
         scheduleNextPoll(state.progress, effectiveHasRunning);
       }
     } catch (err) {
-      console.error('Polling failed:', err);
-      // On error, schedule retry
-      scheduleNextPoll(lastStateRef.current.progress, false);
+      console.error('[Polling] Failed:', err);
+      scheduleNextPoll(lastStateRef.current.progress, true);
     }
-  }, [sessionId, scheduleNextPoll, fetchSession]);
+  }, [scheduleNextPoll, pollCount]);
 
-  // Setup realtime subscription for faster updates
+  // CRITICAL: Store poll in a ref so scheduleNextPoll always calls the latest version
+  const pollRef = useRef(doPoll);
+  useEffect(() => {
+    pollRef.current = doPoll;
+  }, [doPoll]);
+
+  // Expose poll as a stable callback
+  const poll = useCallback(() => {
+    pollRef.current();
+  }, []);
+
+  // Setup realtime subscription - listen for BOTH updates AND inserts
   useEffect(() => {
     if (!useRealtime || !sessionId || !enabled) return;
 
@@ -231,6 +222,7 @@ export function useDiscoveryPolling({
 
     const channel = supabase
       .channel(`discovery-${sessionId}`)
+      // Listen for dossier updates
       .on(
         'postgres_changes',
         {
@@ -241,10 +233,10 @@ export function useDiscoveryPolling({
         },
         (payload) => {
           console.log('[Realtime] Dossier updated:', payload.new);
-          // Trigger immediate poll to refresh state
           poll();
         }
       )
+      // Listen for job updates
       .on(
         'postgres_changes',
         {
@@ -255,7 +247,21 @@ export function useDiscoveryPolling({
         },
         (payload) => {
           console.log('[Realtime] Job updated:', payload.new);
-          // Trigger immediate poll to refresh state
+          poll();
+        }
+      )
+      // CRITICAL: Listen for job INSERTS to catch newly created jobs
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'research_jobs',
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log('[Realtime] New job inserted:', payload.new);
+          // Immediate poll when new jobs are created
           poll();
         }
       )
@@ -272,7 +278,7 @@ export function useDiscoveryPolling({
     };
   }, [useRealtime, sessionId, enabled, poll]);
 
-  // Start polling when enabled and sessionId is set
+  // Start polling when enabled
   useEffect(() => {
     if (!enabled || !sessionId) {
       if (timeoutRef.current) {
@@ -286,7 +292,7 @@ export function useDiscoveryPolling({
     isCompleteRef.current = false;
     setIsPolling(true);
     setPollCount(0);
-    sessionStartTimeRef.current = Date.now(); // Reset warm-up timer
+    sessionStartTimeRef.current = Date.now();
     lastStateRef.current = { progress: 0, hasRunningJobs: true };
 
     console.log('[Polling] Starting polling for session:', sessionId);
@@ -319,6 +325,7 @@ export function useDiscoveryPolling({
     isCompleteRef.current = false;
     setIsPolling(true);
     setPollCount(0);
+    sessionStartTimeRef.current = Date.now();
     lastStateRef.current = { progress: 0, hasRunningJobs: true };
     poll();
   }, [poll]);
