@@ -61,7 +61,13 @@ export function ProspectDossierCard({
     setIsSaving(true);
     try {
       if (isFavorited) {
-        // Remove from favorites - we'd need a delete endpoint, for now just toggle state
+        // Remove from favorites
+        const { error } = await supabase.functions.invoke('remove-prospect', {
+          body: { place_id: prospect.prospectId }
+        });
+        
+        if (error) throw error;
+        
         onFavoriteToggle?.(prospect.prospectId, false);
         toast.success('Removed from favorites');
       } else {
