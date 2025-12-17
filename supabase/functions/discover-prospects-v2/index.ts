@@ -144,6 +144,83 @@ async function batchGeocode(
   return results;
 }
 
+// Robust JSON extraction with multiple fallback strategies
+function extractProspectsFromResponse(content: string): any[] {
+  // Strategy 1: Direct JSON array extraction
+  try {
+    const arrayMatch = content.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      return JSON.parse(arrayMatch[0]);
+    }
+  } catch (e) {
+    console.log('Strategy 1 (array match) failed:', e);
+  }
+
+  // Strategy 2: Look for code block with JSON
+  try {
+    const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
+      const jsonContent = codeBlockMatch[1].trim();
+      const parsed = JSON.parse(jsonContent);
+      return Array.isArray(parsed) ? parsed : [];
+    }
+  } catch (e) {
+    console.log('Strategy 2 (code block) failed:', e);
+  }
+
+  // Strategy 3: Try to fix common JSON issues and parse
+  try {
+    let fixed = content;
+    // Remove trailing commas before ] or }
+    fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
+    // Try to extract array again
+    const arrayMatch = fixed.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      return JSON.parse(arrayMatch[0]);
+    }
+  } catch (e) {
+    console.log('Strategy 3 (fix trailing commas) failed:', e);
+  }
+
+  // Strategy 4: Parse individual objects line by line
+  try {
+    const objects: any[] = [];
+    const lines = content.split('\n');
+    let currentObj = '';
+    let braceCount = 0;
+    
+    for (const line of lines) {
+      for (const char of line) {
+        if (char === '{') braceCount++;
+        if (char === '}') braceCount--;
+        if (braceCount > 0 || char === '{' || char === '}') {
+          currentObj += char;
+        }
+        if (braceCount === 0 && currentObj.length > 0) {
+          try {
+            const obj = JSON.parse(currentObj);
+            if (obj.name && obj.state) {
+              objects.push(obj);
+            }
+          } catch {}
+          currentObj = '';
+        }
+      }
+      if (braceCount > 0) currentObj += ' ';
+    }
+    
+    if (objects.length > 0) {
+      console.log(`Strategy 4 extracted ${objects.length} objects`);
+      return objects;
+    }
+  } catch (e) {
+    console.log('Strategy 4 (line by line) failed:', e);
+  }
+
+  console.error('All JSON extraction strategies failed');
+  return [];
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -224,7 +301,7 @@ serve(async (req) => {
       );
     }
 
-    // Use Lovable AI to find high-quality prospects
+    // Use Lovable AI with tool calling for structured output
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
     if (!LOVABLE_API_KEY) {
@@ -236,25 +313,22 @@ serve(async (req) => {
 
     const states = territory?.states || [];
     
-    const prompt = `You are a B2B sales intelligence researcher finding high-value "rip and replace" opportunities.
+    const prompt = `Find ${limit} high-value "rip and replace" sales opportunities.
 
-Find ${limit} government/enterprise accounts that:
-1. Are located ONLY in these states: ${states.join(", ")}
-2. Fall into these categories: ${targetCategories?.join(", ") || "government agencies"}
-3. Currently use or likely use: ${competitors?.join(", ") || "incumbent vendors"}
-4. Would be excellent prospects for: ${productDescription || "enterprise software"}
+TERRITORY: ${states.join(", ")}
+TARGET CATEGORIES: ${targetCategories?.join(", ") || "government agencies"}
+COMPETITORS TO DISPLACE: ${competitors?.join(", ") || "incumbent vendors"}
+PRODUCT: ${productDescription || "enterprise software"}
 
-For each prospect, provide:
-- name: Full organization name (e.g., "Boston Police Department")
-- city: City name (REQUIRED - must be included for accurate geolocation)
-- state: State name (MUST be from the specified states)
-- score: Initial confidence score 60-100
-- angles: Array of 1-2 short "how to win" tags like ["Renewal window", "Replacement play", "Budget approved", "New leadership"]
-- reasoning: Brief explanation of why they're a good target
+For each prospect, identify:
+- Real organization name
+- City (required for geocoding)
+- State (must be from territory)
+- Score 60-100 based on opportunity quality
+- 1-2 short angle tags like "Renewal window" or "Budget approved"
+- Brief reasoning why they're a good target`;
 
-Focus on REAL organizations with realistic scenarios. No fictional entities.
-Return ONLY a valid JSON array. No explanation text.`;
-
+    // Use tool calling for guaranteed structured output
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -264,9 +338,38 @@ Return ONLY a valid JSON array. No explanation text.`;
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
         messages: [
-          { role: 'system', content: 'You are a B2B market research expert. Return only valid JSON arrays.' },
+          { role: 'system', content: 'You are a B2B sales intelligence expert. Find real organizations that match the criteria.' },
           { role: 'user', content: prompt }
         ],
+        tools: [{
+          type: 'function',
+          function: {
+            name: 'submit_prospects',
+            description: 'Submit the list of discovered prospects',
+            parameters: {
+              type: 'object',
+              properties: {
+                prospects: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      name: { type: 'string', description: 'Full organization name' },
+                      city: { type: 'string', description: 'City name' },
+                      state: { type: 'string', description: 'State name' },
+                      score: { type: 'number', description: 'Opportunity score 60-100' },
+                      angles: { type: 'array', items: { type: 'string' }, description: '1-2 short angle tags' },
+                      reasoning: { type: 'string', description: 'Why this is a good target' }
+                    },
+                    required: ['name', 'city', 'state', 'score', 'angles', 'reasoning']
+                  }
+                }
+              },
+              required: ['prospects']
+            }
+          }
+        }],
+        tool_choice: { type: 'function', function: { name: 'submit_prospects' } }
       }),
     });
 
@@ -291,20 +394,46 @@ Return ONLY a valid JSON array. No explanation text.`;
     }
 
     const data = await response.json();
-    const content = data.choices[0]?.message?.content || '[]';
     
     let aiProspects: any[] = [];
-    try {
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        aiProspects = JSON.parse(jsonMatch[0]);
+    
+    // Extract from tool call response
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    if (toolCall?.function?.arguments) {
+      try {
+        const args = JSON.parse(toolCall.function.arguments);
+        aiProspects = args.prospects || [];
+        console.log(`Extracted ${aiProspects.length} prospects from tool call`);
+      } catch (e) {
+        console.error('Failed to parse tool call arguments:', e);
       }
-    } catch (e) {
-      console.error('Failed to parse AI prospects:', e);
+    }
+    
+    // Fallback to content parsing if tool call didn't work
+    if (aiProspects.length === 0) {
+      const content = data.choices?.[0]?.message?.content || '';
+      console.log('Falling back to content parsing, raw length:', content.length);
+      aiProspects = extractProspectsFromResponse(content);
     }
 
     // Filter to only valid states
     aiProspects = aiProspects.filter(p => states.includes(p.state)).slice(0, limit);
+    
+    console.log(`After filtering: ${aiProspects.length} prospects in territory`);
+
+    if (aiProspects.length === 0) {
+      console.error('No prospects generated after filtering');
+      // Update session status but don't create empty records
+      await supabase
+        .from('discovery_sessions')
+        .update({ status: 'prospects_discovered' })
+        .eq('id', sessionId);
+        
+      return new Response(
+        JSON.stringify({ prospects: [], jobs: [], message: 'No prospects found matching criteria. Try adjusting your territory or categories.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // OPTIMIZATION #1: Batch geocode all prospects in parallel (with concurrency limit)
     const geocodeResults = await batchGeocode(

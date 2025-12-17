@@ -20,6 +20,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Try to get user from auth header (optional for anonymous sessions)
@@ -156,13 +157,23 @@ serve(async (req) => {
             const dossierUrl = `${supabaseUrl}/functions/v1/research-prospect-dossier`;
             
             try {
-              // Fire and forget
+              // Fire with proper headers for function-to-function call
+              // Use apikey header (required) and optionally Authorization
+              const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+                'apikey': anonKey, // Required for Supabase function invocation
+              };
+              
+              // Pass through auth header if present
+              if (authHeader) {
+                headers['Authorization'] = authHeader;
+              }
+
+              console.log(`Starting dossier research for ${prospect.prospect_name} (job ${queuedJob.id})`);
+              
               fetch(dossierUrl, {
                 method: 'POST',
-                headers: {
-                  ...(authHeader ? { 'Authorization': authHeader } : {}),
-                  'Content-Type': 'application/json',
-                },
+                headers,
                 body: JSON.stringify({
                   sessionId,
                   prospect: {
@@ -173,6 +184,13 @@ serve(async (req) => {
                   },
                   jobId: queuedJob.id,
                 }),
+              }).then(async (res) => {
+                if (!res.ok) {
+                  const errText = await res.text().catch(() => 'unknown');
+                  console.error(`Dossier research failed for job ${queuedJob.id}: ${res.status} - ${errText}`);
+                } else {
+                  console.log(`Dossier research started successfully for job ${queuedJob.id}`);
+                }
               }).catch((e) => {
                 console.error(`Background dossier fetch failed for job ${queuedJob.id}:`, e);
               });
