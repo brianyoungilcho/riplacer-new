@@ -13,6 +13,7 @@ import { StepResults } from './StepResults';
 import { Crosshair, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { redirectToApp } from '@/lib/domain';
 
 export interface OnboardingData {
   // Step 1
@@ -259,15 +260,28 @@ export function OnboardingPage() {
 
   // Redirect logged-in users who have completed onboarding to dashboard
   useEffect(() => {
-    if (!authLoading && user) {
-      // Check if user has completed onboarding
-      const submission = localStorage.getItem('riplacer_onboarding_submission');
-      if (submission) {
-        // User already completed onboarding, redirect to dashboard
-        navigate('/app');
+    const redirectToDashboard = async () => {
+      if (!authLoading && user) {
+        // Check if user has completed onboarding
+        const submission = localStorage.getItem('riplacer_onboarding_submission');
+        if (submission) {
+          // User already completed onboarding, redirect to app subdomain with session
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            redirectToApp('/', {
+              access_token: session.access_token,
+              refresh_token: session.refresh_token,
+            });
+          } else {
+            // Fallback: redirect without session
+            redirectToApp('/');
+          }
+        }
       }
-    }
-  }, [user, authLoading, navigate]);
+    };
+    
+    redirectToDashboard();
+  }, [user, authLoading]);
 
   // Show loading state while checking auth
   if (authLoading) {

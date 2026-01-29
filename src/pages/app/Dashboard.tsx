@@ -1,18 +1,22 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { isAppSubdomain, redirectToMain } from '@/lib/domain';
 
 export default function Dashboard() {
   const { user, loading, signOut } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
+  const onAppSubdomain = isAppSubdomain();
 
   useEffect(() => {
     if (!loading && !user) {
-      // Redirect to auth page
-      navigate('/auth');
+      // Redirect to auth - use cross-domain redirect on app subdomain
+      if (onAppSubdomain) {
+        redirectToMain('/auth');
+      }
+      // On main domain, SubdomainRedirect or direct navigation handles it
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, onAppSubdomain]);
 
   if (loading) {
     return (
@@ -26,15 +30,26 @@ export default function Dashboard() {
     return null;
   }
 
+  // Determine home link based on domain
+  const homeLink = onAppSubdomain ? '/' : '/app';
+
+  const handleSignOut = async () => {
+    await signOut();
+    // Redirect to main domain after sign out
+    if (onAppSubdomain) {
+      redirectToMain('/');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <Link
-            to="/app"
+            to={homeLink}
             onClick={(e) => {
-              if (location.pathname === '/app') {
+              if (location.pathname === homeLink || location.pathname === '/' || location.pathname === '/app') {
                 e.preventDefault();
                 window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
               }
@@ -53,10 +68,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-600">{user.email}</span>
             <button
-              onClick={() => {
-                signOut();
-                navigate('/');
-              }}
+              onClick={handleSignOut}
               className="text-sm text-gray-600 hover:text-primary transition-colors"
             >
               Sign out

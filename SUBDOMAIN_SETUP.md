@@ -1,6 +1,6 @@
 # Subdomain Setup: riplacer.com vs app.riplacer.com
 
-## How It Works Now
+## How It Works
 
 ### Domain Separation
 - **riplacer.com** → Marketing site + onboarding (public)
@@ -8,23 +8,77 @@
   - `/start` - Onboarding
   - `/auth` - Sign in/sign up
   - `/thank-you` - Post-signup
+  - `/terms`, `/privacy`, etc. - Legal pages
   
 - **app.riplacer.com** → Dashboard ONLY (auth-protected)
-  - Automatically redirects to `/app` route
-  - Shows dashboard interface
-  - If not logged in → redirects to riplacer.com/auth
+  - `/` - Dashboard (clean URL!)
+  - `/auth` - Sign in/sign up (for direct access)
+  - If not logged in → redirects to `riplacer.com/auth`
 
 ### Technical Implementation
 
-**SubdomainRedirect Component:**
-- Detects which domain user is on
-- If on `app.riplacer.com` → auto-navigate to `/app` route
-- If on `riplacer.com` → normal routing
+**Domain Detection (`src/lib/domain.ts`):**
+- `isAppSubdomain()` - Detects if on `app.riplacer.com` or `app.localhost`
+- `isMainDomain()` - Detects if on `riplacer.com` or `localhost`
+- `redirectToApp()` - Cross-domain redirect with session transfer
+- `redirectToMain()` - Cross-domain redirect to main site
 
-**Result:**
-- Visiting `app.riplacer.com/` → shows dashboard
-- Visiting `riplacer.com/` → shows marketing site
-- Same deployment, smart routing!
+**SubdomainRedirect Component:**
+- Receives and processes transferred sessions from main domain
+- Redirects unauthenticated users on app subdomain to `riplacer.com/auth`
+
+**Domain-Aware Routing (`App.tsx`):**
+- On `app.riplacer.com`: `/` → Dashboard
+- On `riplacer.com`: `/` → Landing page
+- Auth works on both domains
+
+**Session Transfer:**
+- When redirecting from `riplacer.com` to `app.riplacer.com`, auth tokens are passed via URL hash
+- The app subdomain picks up these tokens and restores the session
+- This ensures seamless auth across subdomains despite separate localStorage
+
+---
+
+## User Flows
+
+### First-time User Flow:
+1. Visits `riplacer.com`
+2. Clicks "Get Started" → `/start`
+3. Completes onboarding (may sign in during process)
+4. Clicks "Start Ripping" → `/thank-you`
+5. Clicks "Go to Dashboard" → redirects to `app.riplacer.com` with session
+6. Dashboard loads with clean URL
+
+### Direct Sign-In Flow:
+1. User visits `riplacer.com/auth`
+2. Signs in with email/password or Google
+3. Automatically redirected to `app.riplacer.com` with session
+4. Dashboard loads
+
+### Returning User Flow:
+1. User visits `app.riplacer.com`
+2. If authenticated → Dashboard loads immediately
+3. If not authenticated → Redirected to `riplacer.com/auth`
+4. After sign in → Back to `app.riplacer.com`
+
+### Google OAuth Flow:
+1. User clicks "Continue with Google" (on either domain)
+2. Google OAuth flow completes
+3. Redirected to `app.riplacer.com` (OAuth redirect is always to app subdomain)
+4. Dashboard loads
+
+---
+
+## URL Behavior Matrix
+
+| URL | Authenticated | Not Authenticated |
+|-----|--------------|-------------------|
+| `riplacer.com` | Landing page | Landing page |
+| `riplacer.com/start` | Onboarding | Onboarding |
+| `riplacer.com/auth` | → `app.riplacer.com` | Auth page |
+| `riplacer.com/app` | Dashboard | Dashboard (legacy) |
+| `app.riplacer.com` | Dashboard | → `riplacer.com/auth` |
+| `app.riplacer.com/auth` | → Dashboard | Auth page |
 
 ---
 
@@ -35,7 +89,7 @@
 # Simulates riplacer.com
 http://localhost:8081/           # Landing page
 http://localhost:8081/start      # Onboarding
-http://localhost:8081/app        # Dashboard (manual access)
+http://localhost:8081/auth       # Auth page
 ```
 
 ### Test Subdomain Behavior
@@ -50,29 +104,14 @@ To test subdomain redirect locally:
    ```
    http://app.localhost:8081/
    ```
-   Should auto-redirect to dashboard (`/app` route)
+   - If logged in → Dashboard loads
+   - If not logged in → Redirects to `http://localhost:8081/auth`
 
 ---
 
 ## Production Behavior
 
-### When deployed with both domains:
-
-**User visits `riplacer.com`:**
-- Shows marketing site
-- Can access `/start`, `/auth`, etc.
-- Can manually visit `/app` if they know the URL (auth guard protects it)
-
-**User visits `app.riplacer.com`:**
-- Automatically redirected to `/app` route
-- Shows dashboard immediately
-- If not logged in → redirected to auth
-
----
-
-## Vercel Configuration
-
-### Current Setup
+### Vercel Configuration
 Both domains point to the SAME Vercel deployment:
 - `riplacer.com` → Production deployment
 - `app.riplacer.com` → Production deployment (aliased)
@@ -84,45 +123,31 @@ Go to: https://vercel.com/brianyoungilchos-projects/riplacer-new/settings/domain
 - ✅ riplacer.com (or your main domain)
 - ✅ app.riplacer.com (subdomain)
 
-Both domains are already configured! ✅
-
 ---
 
-## How Users Navigate
+## Key Implementation Details
 
-### First-time User Flow:
-1. Visits `riplacer.com`
-2. Clicks "Get Started" → `/start`
-3. Completes onboarding
-4. Clicks "Start Ripping" → `/thank-you`
-5. Clicks "Go to Dashboard" → navigates to `/app`
-6. URL shows `riplacer.com/app` OR they can bookmark `app.riplacer.com`
+### Cross-Subdomain Auth
+Since `localStorage` is not shared between subdomains, we transfer the session:
 
-### Returning User Flow:
-1. Visits `app.riplacer.com`
-2. Automatically redirected to `/app` route
-3. Dashboard loads (or auth redirect if needed)
-4. Clean URL: `app.riplacer.com`
+1. Get current session tokens from Supabase
+2. Redirect with tokens in URL hash: `app.riplacer.com/#access_token=...&refresh_token=...&type=session_transfer`
+3. On target domain, parse tokens and call `supabase.auth.setSession()`
+4. Clean up URL after processing
 
----
-
-## URL Behavior Matrix
-
-| User Types | What They See |
-|------------|---------------|
-| `riplacer.com` | → Landing page |
-| `riplacer.com/start` | → Onboarding |
-| `riplacer.com/app` | → Dashboard (if logged in) |
-| `app.riplacer.com` | → Auto-redirect to `/app` → Dashboard |
-| `app.riplacer.com/anything` | → Dashboard (redirects to `/app`) |
+### Why URL Hash?
+- Hash (`#`) is not sent to the server (more secure)
+- Supabase already uses this pattern for OAuth callbacks
+- Works with static hosting (no server-side processing needed)
 
 ---
 
 ## Summary
 
 ✅ **riplacer.com** = Public site (marketing, onboarding, auth)
-✅ **app.riplacer.com** = Dashboard entry point (auto-redirects to `/app`)
-✅ **Same deployment** = Simpler, faster, shared code
-✅ **Smart routing** = Subdomain redirect component handles it automatically
+✅ **app.riplacer.com** = Dashboard with clean `/` URL (auth-protected)
+✅ **Same deployment** = Single codebase, smart routing
+✅ **Session transfer** = Seamless auth across subdomains
+✅ **Google OAuth** = Always redirects to app subdomain
 
-**This is already live and working!** Visit https://app.riplacer.com to test.
+**This is live and working!** Test at https://app.riplacer.com

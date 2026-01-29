@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Crosshair, Mail, Lock, ArrowRight, Loader2, ArrowLeft } from 'lucide-react';
 import { z } from 'zod';
+import { isAppSubdomain, redirectToApp, getMainUrl, getAppUrl } from '@/lib/domain';
+import { supabase } from '@/integrations/supabase/client';
 
 const authSchema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -21,13 +23,20 @@ export default function Auth() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   
-  const { signIn, signUp, signInWithGoogle, user } = useAuth();
+  const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  
+  const onAppSubdomain = isAppSubdomain();
 
   // Check if user came from /start or has onboarding progress
   const getReturnPath = () => {
+    // On app subdomain, always go to dashboard (root)
+    if (onAppSubdomain) {
+      return '/';
+    }
+    
     // Check URL state first (passed via navigate)
     const fromState = (location.state as { from?: string })?.from;
     if (fromState === '/start') {
@@ -54,10 +63,35 @@ export default function Auth() {
 
   useEffect(() => {
     if (user) {
-      // If user signs in and has onboarding progress, go back to /start
-      navigate(returnPath === '/start' ? '/start' : '/');
+      if (onAppSubdomain) {
+        // Already on app subdomain, just navigate to dashboard
+        navigate('/');
+      } else {
+        // On main domain - if returning to /start, stay on main domain
+        // Otherwise, redirect to app subdomain
+        if (returnPath === '/start') {
+          navigate('/start');
+        } else {
+          // Redirect to app subdomain with session transfer
+          handleRedirectToApp();
+        }
+      }
     }
-  }, [user, navigate, returnPath]);
+  }, [user, navigate, returnPath, onAppSubdomain]);
+
+  const handleRedirectToApp = async () => {
+    // Get current session to transfer
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      redirectToApp('/', {
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      });
+    } else {
+      // Fallback: just redirect without session (will need to re-auth)
+      redirectToApp('/');
+    }
+  };
 
   const validateForm = () => {
     try {
@@ -109,7 +143,7 @@ export default function Auth() {
           title: isSignUp ? 'Account created!' : 'Welcome back!',
           description: isSignUp ? 'Your account has been created successfully.' : 'You have been signed in.',
         });
-        navigate('/');
+        // Redirect is handled by the useEffect above when user state changes
       }
     } catch (error) {
       toast({
@@ -122,8 +156,40 @@ export default function Auth() {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    
+    // Determine where Google should redirect after auth
+    // Always redirect to app subdomain for OAuth to avoid cross-domain session issues
+    const redirectUrl = onAppSubdomain 
+      ? `${getAppUrl()}/`  // Already on app subdomain
+      : `${getAppUrl()}/`; // Redirect to app subdomain after Google auth
+    
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
+      },
+    });
+    
+    if (error) {
+      toast({
+        title: 'Google Sign-In Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+      setGoogleLoading(false);
+    }
+    // If successful, user will be redirected by Supabase
+  };
+
   // Extract company domain from email for display
   const emailDomain = email.includes('@') ? email.split('@')[1] : null;
+  
+  // Back link depends on domain
+  const backLink = onAppSubdomain ? getMainUrl() : (returnPath === '/start' ? '/start' : '/');
+  const backLinkText = onAppSubdomain ? 'Back to homepage' : (returnPath === '/start' ? 'Back to setup' : 'Back to home');
+  const isExternalBackLink = onAppSubdomain;
 
   return (
     <div className="min-h-screen flex bg-white">
@@ -131,31 +197,54 @@ export default function Auth() {
       <div className="flex-1 flex flex-col justify-center px-8 py-12 lg:px-16">
         <div className="w-full max-w-md mx-auto">
           {/* Back button - returns to /start if user came from there */}
-          <Link 
-            to={returnPath} 
-            className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors mb-8"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            {returnPath === '/start' ? 'Back to setup' : 'Back to home'}
-          </Link>
+          {isExternalBackLink ? (
+            <a 
+              href={backLink}
+              className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors mb-8"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              {backLinkText}
+            </a>
+          ) : (
+            <Link 
+              to={backLink}
+              className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors mb-8"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              {backLinkText}
+            </Link>
+          )}
 
           {/* Logo */}
-          <Link
-            to="/"
-            onClick={(e) => {
-              if (location.pathname === '/') {
-                e.preventDefault();
-                window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-              }
-            }}
-            className="flex items-center gap-2.5 mb-10"
-            aria-label="Riplacer home"
-          >
-            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-              <Crosshair className="w-5 h-5 text-white" strokeWidth={2.5} />
-            </div>
-            <span className="font-bold text-2xl tracking-tight text-gray-900">Riplacer</span>
-          </Link>
+          {onAppSubdomain ? (
+            <a
+              href={getMainUrl()}
+              className="flex items-center gap-2.5 mb-10"
+              aria-label="Riplacer home"
+            >
+              <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+                <Crosshair className="w-5 h-5 text-white" strokeWidth={2.5} />
+              </div>
+              <span className="font-bold text-2xl tracking-tight text-gray-900">Riplacer</span>
+            </a>
+          ) : (
+            <Link
+              to="/"
+              onClick={(e) => {
+                if (location.pathname === '/') {
+                  e.preventDefault();
+                  window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+                }
+              }}
+              className="flex items-center gap-2.5 mb-10"
+              aria-label="Riplacer home"
+            >
+              <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+                <Crosshair className="w-5 h-5 text-white" strokeWidth={2.5} />
+              </div>
+              <span className="font-bold text-2xl tracking-tight text-gray-900">Riplacer</span>
+            </Link>
+          )}
 
           {/* Header */}
           <div className="mb-8">
@@ -252,18 +341,7 @@ export default function Auth() {
               size="lg"
               className="w-full h-12 text-base border-gray-200 hover:bg-gray-50"
               disabled={googleLoading || loading}
-              onClick={async () => {
-                setGoogleLoading(true);
-                const { error } = await signInWithGoogle();
-                if (error) {
-                  toast({
-                    title: 'Google Sign-In Error',
-                    description: error.message,
-                    variant: 'destructive',
-                  });
-                  setGoogleLoading(false);
-                }
-              }}
+              onClick={handleGoogleSignIn}
             >
               {googleLoading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />

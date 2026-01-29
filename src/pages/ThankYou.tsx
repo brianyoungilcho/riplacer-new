@@ -1,8 +1,10 @@
 import { Check, ArrowRight } from 'lucide-react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect } from 'react';
+import { redirectToApp } from '@/lib/domain';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ThankYouState {
   email?: string;
@@ -11,7 +13,6 @@ interface ThankYouState {
 
 export default function ThankYou() {
   const location = useLocation();
-  const navigate = useNavigate();
   const { user, loading } = useAuth();
   const state = (location.state as ThankYouState) || {};
   const email = state.email || 'your inbox';
@@ -22,9 +23,18 @@ export default function ThankYou() {
     localStorage.removeItem('riplacer_onboarding_progress');
   }, []);
 
-  const handleGoToDashboard = () => {
-    // Navigate to dashboard within same app
-    navigate('/app');
+  const handleGoToDashboard = async () => {
+    // Redirect to app subdomain with session transfer
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      redirectToApp('/', {
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      });
+    } else {
+      // Fallback: redirect without session (will need to auth on app subdomain)
+      redirectToApp('/');
+    }
   };
 
   if (loading) {

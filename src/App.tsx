@@ -8,6 +8,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { SubdomainRedirect } from "@/components/SubdomainRedirect";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { Loader2 } from "lucide-react";
+import { isAppSubdomain } from "@/lib/domain";
 
 // Eagerly load the landing page (most common entry point)
 import Index from "./pages/Index";
@@ -37,35 +38,66 @@ const PageLoader = () => (
   </div>
 );
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <SubdomainRedirect />
-          <ScrollToTop />
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/start" element={<OnboardingV2 />} />
-              <Route path="/thank-you" element={<ThankYou />} />
-              <Route path="/app" element={<Dashboard />} />
-              <Route path="/terms" element={<TermsOfService />} />
-              <Route path="/privacy" element={<PrivacyPolicy />} />
-              <Route path="/cookies" element={<CookiePolicy />} />
-              <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
-              <Route path="/disclaimer" element={<Disclaimer />} />
-              <Route path="/refund" element={<RefundPolicy />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
+/**
+ * App routes configuration
+ * 
+ * On app.riplacer.com:
+ * - "/" → Dashboard (the main app experience)
+ * - "/auth" → Auth page (for direct auth on app subdomain)
+ * 
+ * On riplacer.com:
+ * - "/" → Landing page
+ * - "/start" → Onboarding
+ * - "/app" → Dashboard (legacy route, still works)
+ * - "/auth" → Auth page
+ */
+const App = () => {
+  // Determine if we're on the app subdomain
+  const onAppSubdomain = isAppSubdomain();
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <SubdomainRedirect />
+            <ScrollToTop />
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                {/* Root route: Dashboard on app subdomain, Landing page on main domain */}
+                <Route path="/" element={onAppSubdomain ? <Dashboard /> : <Index />} />
+                
+                {/* Auth - works on both domains */}
+                <Route path="/auth" element={<Auth />} />
+                
+                {/* Main domain only routes (marketing, onboarding) */}
+                {!onAppSubdomain && (
+                  <>
+                    <Route path="/start" element={<OnboardingV2 />} />
+                    <Route path="/thank-you" element={<ThankYou />} />
+                    <Route path="/terms" element={<TermsOfService />} />
+                    <Route path="/privacy" element={<PrivacyPolicy />} />
+                    <Route path="/cookies" element={<CookiePolicy />} />
+                    <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
+                    <Route path="/disclaimer" element={<Disclaimer />} />
+                    <Route path="/refund" element={<RefundPolicy />} />
+                  </>
+                )}
+                
+                {/* Legacy /app route - works on both domains for backwards compatibility */}
+                <Route path="/app" element={<Dashboard />} />
+                
+                {/* 404 */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
