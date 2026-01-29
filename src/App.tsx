@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { SubdomainRedirect } from "@/components/SubdomainRedirect";
 import { Loader2 } from "lucide-react";
 
 // Eagerly load the landing page (most common entry point)
@@ -42,6 +43,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <SubdomainRedirect />
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/" element={<Index />} />
