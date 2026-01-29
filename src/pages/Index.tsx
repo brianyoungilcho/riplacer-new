@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
@@ -12,13 +12,23 @@ const preloadOnboarding = () => {
 
 function LandingPage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const location = useLocation();
+
+  const handleLogoClick = (e: React.MouseEvent) => {
+    // Clicking the logo should behave like "scroll to top" even if you're already on "/".
+    if (location.pathname === '/') {
+      e.preventDefault();
+      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+    }
+    setIsMenuOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-white">
       {/* Header - Dark */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#0F1115]/95 backdrop-blur-md border-b border-white/5">
         <div className="container mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5">
+          <Link to="/" className="flex items-center gap-2.5" onClick={handleLogoClick}>
             <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
               <Zap className="w-5 h-5 text-white" strokeWidth={2.5} />
             </div>
@@ -426,12 +436,12 @@ function LandingPage() {
         <div className="container mx-auto px-4 sm:px-6">
           <div className="flex flex-col md:flex-row items-start justify-between gap-6">
             <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2.5">
+              <Link to="/" onClick={handleLogoClick} className="flex items-center gap-2.5 w-fit">
                 <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
                   <Zap className="w-4 h-4 text-white" strokeWidth={2.5} />
                 </div>
                 <span className="font-bold text-white">Riplacer</span>
-              </div>
+              </Link>
               <p className="text-sm text-gray-500">
                 © {new Date().getFullYear()} Riplacer. Built for reps who win.
               </p>

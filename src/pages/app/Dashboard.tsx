@@ -1,10 +1,11 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -30,7 +31,17 @@ export default function Dashboard() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <Link
+            to="/app"
+            onClick={(e) => {
+              if (location.pathname === '/app') {
+                e.preventDefault();
+                window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+              }
+            }}
+            className="flex items-center gap-3"
+            aria-label="Riplacer home"
+          >
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10" strokeWidth={2.5}></circle>
@@ -38,7 +49,7 @@ export default function Dashboard() {
               </svg>
             </div>
             <span className="font-bold text-xl text-gray-900">Riplacer</span>
-          </div>
+          </Link>
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-600">{user.email}</span>
             <button

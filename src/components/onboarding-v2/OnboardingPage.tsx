@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { OnboardingHeader } from './OnboardingHeader';
@@ -61,6 +61,7 @@ const initialData: OnboardingData = {
 export function OnboardingPage() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState(1);
   const [data, setData] = useState<OnboardingData>(initialData);
   const [isSaving, setIsSaving] = useState(false);
@@ -309,6 +310,13 @@ export function OnboardingPage() {
           )}>
             <Link 
               to={user ? '/start' : '/'}
+              onClick={(e) => {
+                const targetPath = user ? '/start' : '/';
+                if (location.pathname === targetPath) {
+                  e.preventDefault();
+                  window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+                }
+              }}
               className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center hover:bg-primary/90 transition-colors flex-shrink-0"
               title={user ? 'Go to Setup' : 'Go to Home'}
             >

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { User } from '@supabase/supabase-js';
 import { OnboardingData } from './OnboardingPage';
 import { cn } from '@/lib/utils';
@@ -63,6 +63,7 @@ export function WorkspaceSidebar({
 }: WorkspaceSidebarProps) {
   const [criteriaExpanded, setCriteriaExpanded] = useState(false);
   const [activeNav, setActiveNav] = useState<'discovery' | 'saved' | 'settings'>('discovery');
+  const location = useLocation();
 
   // Collapsed state - icon-only sidebar
   if (!expanded) {
@@ -72,6 +73,12 @@ export function WorkspaceSidebar({
           {/* Logo */}
           <Link 
             to="/"
+            onClick={(e) => {
+              if (location.pathname === '/') {
+                e.preventDefault();
+                window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+              }
+            }}
             className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center mb-6"
             title="Riplacer"
           >
@@ -162,6 +169,12 @@ export function WorkspaceSidebar({
       <div className="p-4 border-b border-gray-200">
         <Link 
           to="/"
+          onClick={(e) => {
+            if (location.pathname === '/') {
+              e.preventDefault();
+              window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+            }
+          }}
           className="flex items-center gap-2.5"
         >
           <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">

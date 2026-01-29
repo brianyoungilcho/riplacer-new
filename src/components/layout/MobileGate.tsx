@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Crosshair, Monitor, ArrowRight } from 'lucide-react';
@@ -10,17 +10,28 @@ interface MobileGateProps {
 
 export function MobileGate({ children }: MobileGateProps) {
   const isMobile = useIsMobile();
+  const location = useLocation();
 
   if (isMobile) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center">
         {/* Logo */}
-        <div className="flex items-center gap-2.5 mb-8">
+        <Link
+          to="/"
+          onClick={(e) => {
+            if (location.pathname === '/') {
+              e.preventDefault();
+              window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+            }
+          }}
+          className="flex items-center gap-2.5 mb-8"
+          aria-label="Riplacer home"
+        >
           <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
             <Crosshair className="w-6 h-6 text-white" strokeWidth={2.5} />
           </div>
           <span className="font-bold text-2xl text-gray-900">Riplacer</span>
-        </div>
+        </Link>
 
         {/* Icon */}
         <div className="w-20 h-20 rounded-2xl bg-gray-100 flex items-center justify-center mb-6">
