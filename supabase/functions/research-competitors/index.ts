@@ -130,11 +130,14 @@ serve(async (req) => {
       );
     }
 
-    // Try Google Gemini first for search grounding, fallback to Lovable AI
+    // Use Google Gemini with search grounding
     const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
     console.log('Input:', { productDescription, companyDomain });
+    
+    if (!GOOGLE_GEMINI_API_KEY) {
+      throw new Error('GOOGLE_GEMINI_API_KEY is not configured');
+    }
     
     // Clean company name from domain for exclusion
     const companyName = companyDomain?.replace(/\.(com|io|net|org|co|ai|dev)$/i, '').replace(/^www\./, '') || '';
@@ -150,61 +153,36 @@ IMPORTANT:
 - Order by market presence (largest first)`;
 
     let response;
-    let usedModel = 'unknown';
+    const usedModel = 'gemini-2.5-flash';
 
-    // Try Google Gemini with search grounding first
-    if (GOOGLE_GEMINI_API_KEY) {
-      console.log('Calling Gemini 2.5 Flash with Google Search grounding...');
-      
-      response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: 'user',
-                parts: [{ text: prompt }]
-              }
-            ],
-            tools: [
-              {
-                google_search: {}
-              }
-            ],
-            generationConfig: {
-              temperature: 0.5,
-              maxOutputTokens: 2048,
-            }
-          }),
-        }
-      );
-      usedModel = 'gemini-2.5-flash';
-    } else if (LOVABLE_API_KEY) {
-      // Fallback to Lovable AI
-      console.log('GOOGLE_GEMINI_API_KEY not available, using Lovable AI fallback...');
-      
-      response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    console.log('Calling Gemini 2.5 Flash with Google Search grounding...');
+    
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_GEMINI_API_KEY}`,
+      {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            { role: 'system', content: 'You are a market research expert. Return only valid JSON arrays.' },
-            { role: 'user', content: prompt }
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: prompt }]
+            }
           ],
+          tools: [
+            {
+              google_search: {}
+            }
+          ],
+          generationConfig: {
+            temperature: 0.5,
+            maxOutputTokens: 2048,
+          }
         }),
-      });
-      usedModel = 'lovable-gemini-2.5-flash';
-    } else {
-      throw new Error('No AI API key configured (GOOGLE_GEMINI_API_KEY or LOVABLE_API_KEY)');
-    }
+      }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -215,21 +193,13 @@ IMPORTANT:
     const data = await response.json();
     console.log(`${usedModel} response received`);
     
-    // Extract content based on response format
-    let content = '';
-    
-    if (usedModel.startsWith('lovable')) {
-      // Lovable AI / OpenAI format
-      content = data.choices?.[0]?.message?.content || '[]';
-    } else {
-      // Google Gemini direct API format
-      const parts = data.candidates?.[0]?.content?.parts ?? [];
-      content = parts
-        .map((p: any) => (typeof p.text === 'string' ? p.text : ''))
-        .join('\n')
-        .trim() || '[]';
-      console.log('Gemini raw parts (truncated):', JSON.stringify(parts, null, 2).slice(0, 2000));
-    }
+    // Extract content from Google Gemini direct API format
+    const parts = data.candidates?.[0]?.content?.parts ?? [];
+    const content = parts
+      .map((p: any) => (typeof p.text === 'string' ? p.text : ''))
+      .join('\n')
+      .trim() || '[]';
+    console.log('Gemini raw parts (truncated):', JSON.stringify(parts, null, 2).slice(0, 2000));
     
     console.log('AI text content snippet:', content.slice(0, 500));
     

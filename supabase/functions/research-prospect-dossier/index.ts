@@ -199,9 +199,9 @@ serve(async (req) => {
     const PERPLEXITY_API_KEY = Deno.env.get('PERPLEXITY_API_KEY');
     
     if (!PERPLEXITY_API_KEY) {
-      console.error('PERPLEXITY_API_KEY not configured, falling back to Lovable AI');
-      // Fall back to Lovable AI if Perplexity not configured
-      return await fallbackToLovableAI(supabase, sessionId, prospectKey, prospect, session.criteria, jobId);
+      console.error('PERPLEXITY_API_KEY not configured, falling back to Gemini');
+      // Fall back to Gemini if Perplexity not configured
+      return await fallbackToGemini(supabase, sessionId, prospectKey, prospect, session.criteria, jobId);
     }
 
     const criteria = session.criteria as any;
@@ -550,8 +550,8 @@ RESPOND ONLY WITH THE JSON OBJECT.`;
   }
 });
 
-// Fallback to Lovable AI if Perplexity not configured
-async function fallbackToLovableAI(
+// Fallback to Gemini if Perplexity not configured
+async function fallbackToGemini(
   supabase: any, 
   sessionId: string, 
   prospectKey: string, 
@@ -559,9 +559,9 @@ async function fallbackToLovableAI(
   criteria: any,
   jobId?: string
 ) {
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
   
-  if (!LOVABLE_API_KEY) {
+  if (!GOOGLE_GEMINI_API_KEY) {
     throw new Error('No AI service configured');
   }
 
@@ -587,14 +587,14 @@ Provide a dossier with:
 
 Return only valid JSON.`;
 
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+  const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Authorization': `Bearer ${GOOGLE_GEMINI_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.5-pro', // Use pro model for better reasoning
+      model: 'gemini-2.5-pro',
       messages: [
         { role: 'system', content: 'You are a B2B sales intelligence researcher. Return only valid JSON.' },
         { role: 'user', content: prompt }
@@ -626,7 +626,7 @@ Return only valid JSON.`;
   }
 
   dossier.lastUpdated = new Date().toISOString();
-  dossier.researchMethod = 'lovable-ai-fallback';
+  dossier.researchMethod = 'gemini-fallback';
   dossier.sources = [];
 
   await supabase

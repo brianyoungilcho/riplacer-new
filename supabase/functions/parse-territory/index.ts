@@ -73,9 +73,9 @@ serve(async (req) => {
       }
     }
 
-    // Use Lovable AI for complex parsing
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
+    // Use Gemini for complex parsing
+    const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
+    if (!GOOGLE_GEMINI_API_KEY) {
       return new Response(
         JSON.stringify({
           states: [],
@@ -99,14 +99,14 @@ Return a JSON object with:
 
 Return ONLY valid JSON.`;
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${GOOGLE_GEMINI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'gemini-2.5-flash',
         messages: [
           { role: 'system', content: 'You are a geography expert. Parse territory descriptions into structured data. Return only valid JSON.' },
           { role: 'user', content: prompt }

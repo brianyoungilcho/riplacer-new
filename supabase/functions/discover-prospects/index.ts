@@ -228,13 +228,13 @@ serve(async (req) => {
       );
     }
 
-    // Use Lovable AI to generate intelligent prospect suggestions
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    // Use Gemini to generate intelligent prospect suggestions
+    const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
     
     let aiProspects: any[] = [];
     let aiLatency = 0;
 
-    if (LOVABLE_API_KEY) {
+    if (GOOGLE_GEMINI_API_KEY) {
       const aiStartTime = Date.now();
       try {
         const prompt = `You are a B2B sales intelligence researcher. Find government/enterprise accounts that:
@@ -256,14 +256,14 @@ For each prospect, provide:
 
 Return a JSON array of 10 prospects. Return ONLY valid JSON, no explanation.`;
 
-        const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'Authorization': `Bearer ${GOOGLE_GEMINI_API_KEY}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'google/gemini-2.5-flash',
+            model: 'gemini-2.5-flash',
             messages: [
               { role: 'system', content: 'You are a B2B market research expert. Return only valid JSON arrays of prospect objects.' },
               { role: 'user', content: prompt }

@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+const googleGeminiApiKey = Deno.env.get('GOOGLE_GEMINI_API_KEY');
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -96,15 +96,22 @@ Return your analysis as JSON with this exact format:
 
 Be specific and actionable. If you can't determine something with confidence, provide reasonable estimates based on the category.`;
 
-    // Use Lovable AI Gateway
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    if (!googleGeminiApiKey) {
+      return new Response(
+        JSON.stringify({ error: 'AI service not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Use Gemini OpenAI-compatible endpoint
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
+        'Authorization': `Bearer ${googleGeminiApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'gemini-2.5-flash',
         messages: [
           { role: 'system', content: 'You are a sales intelligence AI specializing in government/public sector procurement. Always respond with valid JSON.' },
           { role: 'user', content: prompt }
