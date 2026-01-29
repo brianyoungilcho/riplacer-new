@@ -1,5 +1,5 @@
 import { useAuth } from '@/hooks/useAuth';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { isAppSubdomain, redirectToMain } from '@/lib/domain';
 
@@ -7,8 +7,16 @@ export default function Dashboard() {
   const { user, loading, signOut } = useAuth();
   const location = useLocation();
   const onAppSubdomain = isAppSubdomain();
+  
+  // Track if we're intentionally signing out to prevent redirect race
+  const isSigningOut = useRef(false);
 
   useEffect(() => {
+    // Don't redirect if we're in the process of signing out
+    if (isSigningOut.current) {
+      return;
+    }
+    
     if (!loading && !user) {
       // Redirect to auth - use cross-domain redirect on app subdomain
       if (onAppSubdomain) {
@@ -33,11 +41,22 @@ export default function Dashboard() {
   // Determine home link based on domain
   const homeLink = onAppSubdomain ? '/' : '/app';
 
-  const handleSignOut = async () => {
-    await signOut();
-    // Redirect to main domain after sign out
+  const handleSignOut = () => {
+    // Mark that we're signing out to prevent redirect loops
+    isSigningOut.current = true;
+    // Also set in sessionStorage so SubdomainRedirect can check
+    sessionStorage.setItem('riplacer_signing_out', 'true');
+    
+    // IMPORTANT: Redirect FIRST, then sign out
+    // This prevents SubdomainRedirect from redirecting to /auth
     if (onAppSubdomain) {
+      // Start sign out (don't await - let it complete asynchronously)
+      signOut();
+      // Immediately redirect to main domain
       redirectToMain('/');
+    } else {
+      // On main domain, just sign out normally
+      signOut();
     }
   };
 

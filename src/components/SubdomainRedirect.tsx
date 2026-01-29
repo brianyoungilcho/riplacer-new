@@ -51,6 +51,14 @@ export function SubdomainRedirect() {
 
     // Only apply redirect logic on app subdomain
     if (!isAppSubdomain()) {
+      // On main domain, clear sign-out flag if present
+      sessionStorage.removeItem('riplacer_signing_out');
+      return;
+    }
+
+    // Don't redirect if we're in the process of signing out
+    // (This prevents a race condition where signOut triggers redirect before navigation completes)
+    if (sessionStorage.getItem('riplacer_signing_out') === 'true') {
       return;
     }
 
