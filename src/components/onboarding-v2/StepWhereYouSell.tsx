@@ -76,12 +76,17 @@ export function StepWhereYouSell({ data, updateData, onNext, onBack }: StepWhere
   const handleContinue = () => {
     // Determine if this is a custom territory (description-based) or state selection
     const isCustomTerritory = description.trim().length > 0 && selectedStates.length === 0;
-    
+
+    const territoryFilters = isCustomTerritory
+      ? [description.trim()]
+      : selectedStates.map((state) => STATE_ABBREV[state] || state);
+
     updateData({
       region: activeRegion,
       states: selectedStates,
       territoryDescription: description || undefined,
       isCustomTerritory,
+      filters: territoryFilters,
     });
     onNext();
   };
@@ -97,48 +102,55 @@ export function StepWhereYouSell({ data, updateData, onNext, onBack }: StepWhere
 
   if (showDescribe) {
     return (
-      <div className="py-16 px-8">
-        
-        <div className="max-w-xl mx-auto relative z-10">
-          <h1 className="text-3xl font-semibold text-gray-900 text-center mb-3">
-            Describe your territory
-          </h1>
-          <p className="text-gray-500 text-center mb-8">
-            Tell us about your sales region and we'll figure out the rest.
-          </p>
+      <div className="h-full flex flex-col">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 sm:py-10">
+          <div className="max-w-lg mx-auto relative z-10">
+            <h1 className="text-3xl font-semibold text-gray-900 mb-3">
+              Describe your territory
+            </h1>
+            <p className="text-gray-500 mb-8">
+              Tell us about your sales region and we'll figure out the rest.
+            </p>
 
-          <Textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="e.g., Major metropolitan areas in the Pacific Northwest with populations over 100,000, or all of New England except Maine..."
-            className="min-h-[140px] text-base resize-none border-gray-200 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-gray-400 bg-white"
-            autoFocus
-          />
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g., Major metropolitan areas in the Pacific Northwest with populations over 100,000, or all of New England except Maine..."
+              className="min-h-[160px] sm:min-h-[140px] text-base resize-none border-gray-200 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-gray-400 bg-white"
+              autoFocus
+            />
 
-          <p className="text-sm text-gray-400 mt-3 text-center">
-            Our AI will interpret your description and identify relevant areas.
-          </p>
+            <p className="text-sm text-gray-400 mt-3">
+              Our AI will interpret your description and identify relevant areas.
+            </p>
 
-          <button 
-            onClick={() => setShowDescribe(false)}
-            className="block w-full text-center text-sm text-primary hover:underline mt-6"
-          >
-            ← Back to selecting states
-          </button>
+            <button
+              onClick={() => setShowDescribe(false)}
+              className="block w-full text-left text-sm text-primary hover:underline mt-6"
+            >
+              ← Back to selecting states
+            </button>
+          </div>
+        </div>
 
-          <div className="flex gap-3 mt-8">
+        <div className="p-4 sm:p-6 border-t border-gray-200 bg-white">
+          <div className="max-w-lg mx-auto flex flex-col sm:flex-row gap-3">
             <Button
               type="button"
-              onClick={() => setShowDescribe(false)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onBack();
+              }}
               variant="outline"
-              className="flex-1 h-12 text-base font-medium rounded-xl border-gray-200"
+              className="flex-1 h-14 sm:h-12 text-base font-medium rounded-xl border-gray-200"
             >
               Back
             </Button>
             <Button
               onClick={handleContinue}
               disabled={description.trim().length < 10}
-              className="flex-1 h-12 text-base font-medium rounded-xl bg-primary hover:bg-primary/90"
+              className="flex-1 h-14 sm:h-12 text-base font-medium rounded-xl bg-primary hover:bg-primary/90"
             >
               Continue
             </Button>
@@ -149,16 +161,16 @@ export function StepWhereYouSell({ data, updateData, onNext, onBack }: StepWhere
   }
 
   return (
-    <div className="py-12 px-8">
-      
-      <div className="max-w-xl mx-auto relative z-10">
-        {/* Title */}
-        <h1 className="text-3xl font-semibold text-gray-900 text-center mb-3">
-          Where are you selling?
-        </h1>
-        <p className="text-gray-500 text-center mb-8">
-          Select the states in your territory. You can narrow down to specific cities later.
-        </p>
+    <div className="h-full flex flex-col">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 sm:py-10">
+        <div className="max-w-lg mx-auto relative z-10">
+          {/* Title */}
+          <h1 className="text-3xl font-semibold text-gray-900 mb-3">
+            Where are you selling?
+          </h1>
+          <p className="text-gray-500 mb-8">
+            Select the states in your territory. You can narrow down to specific cities later.
+          </p>
 
         {/* Region Filter Bar */}
         <div className="mb-6">
@@ -255,36 +267,39 @@ export function StepWhereYouSell({ data, updateData, onNext, onBack }: StepWhere
         )}
 
         {/* Describe Alternative */}
-        <button 
+        <button
           onClick={() => setShowDescribe(true)}
-          className="block w-full text-center text-sm text-primary hover:underline mt-8 mb-6"
+          className="block w-full text-left text-sm text-primary hover:underline mt-8"
         >
           I'll describe my territory instead →
         </button>
-
-        {/* Action Buttons */}
-        <div className="flex gap-3">
-          <Button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onBack();
-            }}
-            variant="outline"
-            className="flex-1 h-12 text-base font-medium rounded-xl border-gray-200"
-          >
-            Back
-          </Button>
-          <Button
-            onClick={handleContinue}
-            disabled={!canContinue}
-            className="flex-1 h-12 text-base font-medium rounded-xl bg-primary hover:bg-primary/90"
-          >
-            Continue
-          </Button>
-        </div>
       </div>
     </div>
+
+    {/* Action Buttons */}
+    <div className="p-4 sm:p-6 border-t border-gray-200 bg-white">
+      <div className="max-w-lg mx-auto flex flex-col sm:flex-row gap-3">
+        <Button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onBack();
+          }}
+          variant="outline"
+          className="flex-1 h-14 sm:h-12 text-base font-medium rounded-xl border-gray-200"
+        >
+          Back
+        </Button>
+        <Button
+          onClick={handleContinue}
+          disabled={!canContinue}
+          className="flex-1 h-14 sm:h-12 text-base font-medium rounded-xl bg-primary hover:bg-primary/90"
+        >
+          Continue
+        </Button>
+      </div>
+    </div>
+  </div>
   );
 }

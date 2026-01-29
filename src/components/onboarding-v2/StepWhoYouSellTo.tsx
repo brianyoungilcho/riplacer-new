@@ -71,32 +71,15 @@ export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYo
 
   return (
     <div className="h-full flex flex-col relative overflow-hidden">
-      
-      {/* Filter Pills - Show territory selections */}
-      {territoryFilters.length > 0 && (
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <div className="flex flex-wrap gap-2">
-            {territoryFilters.map((filter, idx) => (
-              <span 
-                key={idx}
-                className="px-3 py-1.5 bg-white rounded-full text-sm border border-gray-200"
-              >
-                {filter}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-8">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 sm:py-10">
         <div className="max-w-lg mx-auto">
           {/* Title */}
-          <h1 className="text-3xl font-bold text-gray-900 mb-3">
+          <h1 className="text-3xl font-semibold text-gray-900 mb-3">
             Who are you selling to?
           </h1>
           
-          <p className="text-gray-600 mb-8">
+          <p className="text-gray-500 mb-8">
             Tell us who your customers are. Select all that apply.
           </p>
 
@@ -129,8 +112,8 @@ export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYo
       </div>
 
       {/* Action Buttons */}
-      <div className="p-6 border-t border-gray-200 bg-white">
-        <div className="max-w-lg mx-auto flex gap-3">
+      <div className="p-4 sm:p-6 border-t border-gray-200 bg-white">
+        <div className="max-w-lg mx-auto flex flex-col sm:flex-row gap-3">
           <Button
             type="button"
             onClick={(e) => {
@@ -139,14 +122,14 @@ export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYo
               onBack();
             }}
             variant="outline"
-            className="flex-1 h-12 text-base font-medium rounded-xl"
+            className="flex-1 h-14 sm:h-12 text-base font-medium rounded-xl"
           >
             Back
           </Button>
           <Button
             onClick={handleContinue}
             disabled={!canContinue}
-            className="flex-1 h-12 text-base font-medium rounded-xl"
+            className="flex-1 h-14 sm:h-12 text-base font-medium rounded-xl"
           >
             Continue
           </Button>

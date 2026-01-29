@@ -64,49 +64,55 @@ export function StepWhatYouSell({ data, updateData, onNext }: StepWhatYouSellPro
   };
 
   return (
-    <div className="flex-1 flex items-center justify-center px-8 relative overflow-hidden">
+    <div className="h-full flex flex-col relative overflow-hidden">
       {/* Subtle dotted background pattern */}
       <div className="dotted-bg dotted-bg-gentle-float" />
-      
-      <div className="w-full max-w-lg text-center relative z-10">
-        {/* Title */}
-        <h1 className="text-3xl font-semibold text-gray-900 mb-3 tracking-tight">
-          What are you selling?
-        </h1>
-        <p className="text-gray-500 mb-8">
-          Drop your website or describe your product.
-        </p>
 
-        {/* Single textarea - left-aligned text */}
-        <Textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="axon.com or 'Body-worn cameras for law enforcement...'"
-          className="min-h-[120px] text-base resize-none border-gray-200 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-gray-400 placeholder:text-gray-400 bg-white"
-          autoFocus
-        />
+      <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 sm:py-10 relative z-10 sm:flex sm:items-center sm:justify-center">
+        <div className="w-full max-w-lg mx-auto text-left sm:text-center">
+          {/* Title */}
+          <h1 className="text-3xl font-semibold text-gray-900 mb-3">
+            What are you selling?
+          </h1>
+          <p className="text-gray-500 mb-8">
+            Drop your website or describe your product.
+          </p>
 
-        {/* Continue button */}
-        <Button
-          onClick={handleContinue}
-          disabled={!isValid || isAnalyzing}
-          className="w-full mt-6 h-12 bg-primary hover:bg-primary/90 text-white rounded-xl"
-        >
-          {isAnalyzing ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <>
-              Continue
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </>
-          )}
-        </Button>
+          {/* Single textarea - left-aligned text */}
+          <Textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="axon.com or 'Body-worn cameras for law enforcement...'"
+            className="min-h-[140px] sm:min-h-[120px] text-base sm:text-base resize-none border-gray-200 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-gray-400 placeholder:text-gray-400 bg-white text-left"
+            autoFocus
+          />
 
-        {/* Helper text */}
-        <p className="text-sm text-gray-400 mt-4">
-          We'll figure out what you're selling either way
-        </p>
+          {/* Helper text */}
+          <p className="text-sm text-gray-400 mt-4 text-center sm:text-left">
+            We'll figure out what you're selling either way
+          </p>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="p-4 sm:p-6 border-t border-gray-200 bg-white">
+        <div className="max-w-lg mx-auto">
+          <Button
+            onClick={handleContinue}
+            disabled={!isValid || isAnalyzing}
+            className="w-full h-14 sm:h-12 text-base font-semibold bg-primary hover:bg-primary/90 text-white rounded-xl"
+          >
+            {isAnalyzing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                Continue
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );
