@@ -13,6 +13,8 @@ import Index from "./pages/Index";
 // Lazy load all other routes for better initial bundle size
 const Auth = lazy(() => import("./pages/Auth"));
 const OnboardingV2 = lazy(() => import("./pages/OnboardingV2"));
+const ThankYou = lazy(() => import("./pages/ThankYou"));
+const Dashboard = lazy(() => import("./pages/app/Dashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
@@ -45,6 +47,8 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/start" element={<OnboardingV2 />} />
+              <Route path="/thank-you" element={<ThankYou />} />
+              <Route path="/app" element={<Dashboard />} />
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/cookies" element={<CookiePolicy />} />

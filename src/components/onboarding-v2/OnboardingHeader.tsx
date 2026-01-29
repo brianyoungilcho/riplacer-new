@@ -22,11 +22,11 @@ interface OnboardingHeaderProps {
   data: OnboardingData;
   step: number;
   user: User | null;
-  onEditDomain?: () => void;
   onEditTerritory?: () => void;
+  onEditBuyers?: () => void;
 }
 
-export function OnboardingHeader({ data, step, user, onEditDomain, onEditTerritory }: OnboardingHeaderProps) {
+export function OnboardingHeader({ data, step, user, onEditTerritory, onEditBuyers }: OnboardingHeaderProps) {
   // Only show territory info AFTER step 2 is completed (step >= 3)
   const showTerritoryPills = step >= 3 && (data.states.length > 0 || data.territoryDescription);
   
@@ -66,40 +66,45 @@ export function OnboardingHeader({ data, step, user, onEditDomain, onEditTerrito
     });
   }
   
-  return (
-    <header className="h-14 border-b border-gray-200 bg-white px-6 flex items-center justify-between relative z-10">
-      {/* Left side - Product description (full, truncated) and Territory pills */}
-      <div className="flex items-center gap-3 min-w-0 flex-1">
-        {data.productDescription && (
-          <button
-            onClick={() => onEditDomain?.()}
-            className="px-3 py-1.5 bg-gray-100 rounded-lg text-sm text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer truncate max-w-md"
-            title={data.productDescription}
-          >
-            {data.productDescription.length > 50 
-              ? data.productDescription.slice(0, 50) + '...' 
-              : data.productDescription}
-          </button>
-        )}
+  // Get category labels for pills
+  const CATEGORY_LABELS: Record<string, string> = {
+    'police': 'Police Departments',
+    'sheriff': 'Sheriff Offices',
+    'fire': 'Fire Departments',
+    'ems': 'EMS/Ambulance',
+    'schools_k12': 'K-12 Schools',
+    'higher_ed': 'Higher Education',
+    'city_gov': 'City Government',
+    'county_gov': 'County Government',
+    'state_agency': 'State Agencies',
+    'transit': 'Transit Authorities',
+    'utilities': 'Public Utilities',
+    'hospitals': 'Public Hospitals',
+  };
 
-        {/* Territory pills - only show after step 2 is done */}
+  // Show buyer category pills after step 3
+  const showBuyerPills = step >= 4 && data.targetCategories.length > 0;
+
+  return (
+    <header className="border-b border-gray-200 bg-white px-6 py-3 flex items-center justify-between relative z-10 flex-wrap gap-2">
+      {/* Filter Pills Row */}
+      <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+        {/* Territory pills - show after step 2 is done */}
         {showTerritoryPills && (
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Show custom territory description if user typed one */}
+          <>
             {data.isCustomTerritory && data.territoryDescription ? (
               <button
                 onClick={() => onEditTerritory?.()}
-                className="px-3 py-1.5 bg-purple-100 rounded-lg text-xs font-medium text-purple-700 hover:bg-purple-200 transition-colors cursor-pointer max-w-xs truncate"
+                className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer max-w-xs truncate"
                 title={`Custom territory: ${data.territoryDescription}`}
               >
-                📍 {data.territoryDescription.length > 40 
-                  ? data.territoryDescription.slice(0, 40) + '...' 
+                {data.territoryDescription.length > 30 
+                  ? data.territoryDescription.slice(0, 30) + '...' 
                   : data.territoryDescription}
               </button>
             ) : (
-              /* Show state pills for selected states */
               <>
-                {data.states.slice(0, 5).map(state => (
+                {data.states.slice(0, 6).map(state => (
                   <button
                     key={state}
                     onClick={() => onEditTerritory?.()}
@@ -109,33 +114,48 @@ export function OnboardingHeader({ data, step, user, onEditDomain, onEditTerrito
                     {STATE_ABBREV[state] || state}
                   </button>
                 ))}
-                {data.states.length > 5 && (
+                {data.states.length > 6 && (
                   <button
                     onClick={() => onEditTerritory?.()}
                     className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-500 hover:bg-gray-200 transition-colors cursor-pointer"
                     title="Click to edit territory"
                   >
-                    +{data.states.length - 5}
+                    +{data.states.length - 6}
                   </button>
                 )}
               </>
             )}
-          </div>
+          </>
+        )}
+
+        {/* Buyer category pills - show after step 3 is done */}
+        {showBuyerPills && (
+          <>
+            {data.targetCategories.slice(0, 3).map(category => (
+              <button
+                key={category}
+                onClick={() => onEditBuyers?.()}
+                className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+                title="Click to edit buyer types"
+              >
+                {CATEGORY_LABELS[category] || category}
+              </button>
+            ))}
+            {data.targetCategories.length > 3 && (
+              <button
+                onClick={() => onEditBuyers?.()}
+                className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-500 hover:bg-gray-200 transition-colors cursor-pointer"
+                title="Click to edit buyer types"
+              >
+                +{data.targetCategories.length - 3} more
+              </button>
+            )}
+          </>
         )}
       </div>
 
-      {/* Right side - Domain and Profile/Sign up */}
+      {/* Right side - Sign in button */}
       <div className="flex items-center gap-3 flex-shrink-0">
-        {domain && (
-          <button
-            onClick={() => onEditDomain?.()}
-            className="px-3 py-1.5 bg-gray-100 rounded-lg text-sm text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
-            title="Click to edit domain"
-          >
-            {domain}
-          </button>
-        )}
-        
         {user ? (
           <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
             {user.user_metadata?.avatar_url ? (
@@ -155,7 +175,7 @@ export function OnboardingHeader({ data, step, user, onEditDomain, onEditTerrito
               variant="outline"
               className="h-8 px-3 text-sm"
             >
-              Sign up
+              Sign in
             </Button>
           </Link>
         )}

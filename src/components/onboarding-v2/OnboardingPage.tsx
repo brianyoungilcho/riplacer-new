@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { OnboardingHeader } from './OnboardingHeader';
@@ -7,17 +7,12 @@ import { StepWhatYouSell } from './StepWhatYouSell';
 import { StepWhereYouSell } from './StepWhereYouSell';
 import { StepWhoYouSellTo } from './StepWhoYouSellTo';
 import { StepCompetitors } from './StepCompetitors';
+import { StepTargetAccount } from './StepTargetAccount';
+import { StepAdditionalContext } from './StepAdditionalContext';
 import { StepResults } from './StepResults';
-import { LazyOnboardingMap } from './LazyOnboardingMap';
-import { SavedLeadsTab, SettingsTab, type Prospect } from './workspace';
-import { DiscoveryV2Tab } from '@/components/discovery-v2';
-import { type DiscoveryProspect } from '@/hooks/useDiscoverySession';
-import { Crosshair, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Search, Star, Settings, SlidersHorizontal } from 'lucide-react';
+import { Crosshair, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
-
-type WorkspaceTab = 'discovery' | 'saved' | 'settings';
 
 export interface OnboardingData {
   // Step 1
@@ -40,6 +35,15 @@ export interface OnboardingData {
   suggestedCompetitors?: string[]; // AI-suggested competitors (from early research)
   competitorResearchLoading?: boolean; // true while fetching suggestions
   competitorResearchFailed?: boolean; // true if AI call succeeded but returned no competitors
+
+  // Step 5
+  targetAccount?: string;
+
+  // Step 6
+  additionalContext?: string;
+
+  // Step 7
+  email?: string;
   
   // Filters (derived from selections)
   filters: string[];
@@ -56,47 +60,15 @@ const initialData: OnboardingData = {
 
 export function OnboardingPage() {
   const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [data, setData] = useState<OnboardingData>(initialData);
   const [isSaving, setIsSaving] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
-  const [isLaunched, setIsLaunched] = useState(false); // Track workspace mode
-  const [mapExpanded, setMapExpanded] = useState(true); // Map panel visibility
-  const [searchCriteriaExpanded, setSearchCriteriaExpanded] = useState(false); // Search criteria dropdown
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('discovery'); // Workspace tab
-  const [mapProspects, setMapProspects] = useState<Prospect[]>([]); // Prospects for map markers (currently unused with v2)
-  const [selectedProspectId, setSelectedProspectId] = useState<string | null>(null); // Selected prospect on map
   
   // Track previous step and product description to detect when user goes back to modify product
   const prevStepRef = useRef<number>(1);
   const prevProductDescriptionRef = useRef<string>('');
-
-  // Memoized criteria object to prevent unnecessary re-renders in DiscoveryV2Tab
-  const discoveryCriteria = useMemo(() => ({
-    productDescription: data.productDescription,
-    companyDomain: data.companyDomain,
-    territory: { states: data.states, cities: data.cities },
-    targetCategories: data.targetCategories,
-    competitors: data.competitors,
-  }), [data.productDescription, data.companyDomain, data.states, data.cities, data.targetCategories, data.competitors]);
-
-  // Memoized callback for prospect selection from discovery tab
-  const handleProspectSelect = useCallback((p: DiscoveryProspect | null) => {
-    setSelectedProspectId(p?.prospectId || null);
-  }, []);
-
-  // Memoized callback for prospects change (updates map markers)
-  const handleProspectsChange = useCallback((prospects: DiscoveryProspect[]) => {
-    // Convert v2 prospects to map-compatible format
-    const mapped = prospects.map(p => ({
-      id: p.prospectId,
-      name: p.name,
-      score: p.dossier?.score || p.score || p.initialScore || 0,
-      lat: p.lat,
-      lng: p.lng,
-    }));
-    setMapProspects(mapped);
-  }, []);
 
   // Load saved progress from localStorage on mount
   useEffect(() => {
@@ -111,10 +83,6 @@ export function OnboardingPage() {
         // Initialize refs with loaded data
         prevStepRef.current = loadedStep;
         prevProductDescriptionRef.current = loadedData.productDescription || '';
-        // Also check if already launched
-        if (parsed.isLaunched) {
-          setIsLaunched(true);
-        }
       } catch (e) {
         console.error('Failed to parse saved onboarding progress:', e);
       }
@@ -132,7 +100,7 @@ export function OnboardingPage() {
     // Debounce localStorage writes by 500ms
     saveTimeoutRef.current = setTimeout(() => {
       try {
-        localStorage.setItem('riplacer_onboarding_progress', JSON.stringify({ data, step, isLaunched }));
+        localStorage.setItem('riplacer_onboarding_progress', JSON.stringify({ data, step }));
       } catch (err) {
         console.error('Failed to save to localStorage:', err);
       }
@@ -143,19 +111,19 @@ export function OnboardingPage() {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [data, step, isLaunched]);
+  }, [data, step]);
 
   const updateData = useCallback((updates: Partial<OnboardingData>) => {
     setData(prev => ({ ...prev, ...updates }));
   }, []);
   
-  // Detect when user navigates back to step 1 from a later step (especially step 4)
+  // Detect when user navigates back to step 1 from a later step
   // Clear competitor suggestions so they can be re-fetched if product changes
   useEffect(() => {
     const prevStep = prevStepRef.current;
     
-    // If user navigated back to step 1 from step 2+ (especially step 4 where competitors are shown)
-    if (step === 1 && prevStep > 1 && prevStep <= 4) {
+    // If user navigated back to step 1 from step 2+
+    if (step === 1 && prevStep > 1) {
       console.log('🔄 [Frontend] User navigated back to step 1 from step', prevStep, '- clearing competitor suggestions');
       updateData({ 
         suggestedCompetitors: undefined,
@@ -254,114 +222,51 @@ export function OnboardingPage() {
   }, [step, data.productDescription, data.companyDomain, data.suggestedCompetitors, data.competitorResearchLoading, updateData]);
 
   const nextStep = useCallback(() => {
-    setStep(prev => Math.min(prev + 1, 5));
+    setStep(prev => Math.min(prev + 1, 7));
   }, []);
 
   const prevStep = useCallback(() => {
     setStep(prev => Math.max(prev - 1, 1));
   }, []);
 
-  // Handle launching the search (transitions to workspace mode)
-  const handleLaunch = useCallback(async () => {
+  const handleSubmit = useCallback(async (email: string) => {
     setIsSaving(true);
-    
+
     try {
-      // Save to localStorage first
-      localStorage.setItem('riplacer_onboarding', JSON.stringify(data));
-      
-      // If user is logged in, save to database
-      if (user) {
-        // Save profile data
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            product_description: data.productDescription,
-            competitor_names: data.competitors,
-            onboarding_complete: true,
-            onboarding_data: data as any,
-          })
-          .eq('id', user.id);
+      const submission = {
+        ...data,
+        email,
+        submittedAt: new Date().toISOString(),
+      };
 
-        if (profileError) {
-          console.error('Failed to save profile:', profileError);
-        }
+      updateData({ email });
+      localStorage.setItem('riplacer_onboarding_submission', JSON.stringify(submission));
 
-        // Save territory data
-        const { error: territoryError } = await supabase
-          .from('user_territories')
-          .upsert({
-            user_id: user.id,
-            region: data.region || null,
-            states: data.states,
-            cities: data.cities,
-            description: data.territoryDescription || null,
-          }, {
-            onConflict: 'user_id',
-          });
-
-        if (territoryError) {
-          console.error('Failed to save territory:', territoryError);
-        }
-
-        // Save categories
-        if (data.targetCategories.length > 0) {
-          await supabase
-            .from('user_categories')
-            .delete()
-            .eq('user_id', user.id);
-
-          const categoryInserts = data.targetCategories.map(cat => ({
-            user_id: user.id,
-            category_id: cat,
-            category_name: cat,
-          }));
-
-          const { error: categoryError } = await supabase
-            .from('user_categories')
-            .insert(categoryInserts);
-
-          if (categoryError) {
-            console.error('Failed to save categories:', categoryError);
-          }
-        }
-
-        // Save competitors
-        if (data.competitors.length > 0) {
-          await supabase
-            .from('user_competitors')
-            .delete()
-            .eq('user_id', user.id);
-
-          const competitorInserts = data.competitors.map(comp => ({
-            user_id: user.id,
-            competitor_name: comp,
-          }));
-
-          const { error: competitorError } = await supabase
-            .from('user_competitors')
-            .insert(competitorInserts);
-
-          if (competitorError) {
-            console.error('Failed to save competitors:', competitorError);
-          }
-        }
+      const { error } = await supabase.functions.invoke('submit-onboarding', { body: submission });
+      if (error) {
+        console.error('Submit onboarding error:', error);
       }
-      
-      // Transition to workspace mode
-      setIsLaunched(true);
+
+      navigate('/thank-you', { state: { email, targetAccount: data.targetAccount } });
     } catch (error) {
-      console.error('Failed to launch:', error);
+      console.error('Failed to submit onboarding:', error);
       toast.error('Something went wrong. Please try again.');
     } finally {
       setIsSaving(false);
     }
-  }, [data, user]);
+  }, [data, navigate, updateData]);
 
-  // Handle editing criteria from workspace mode
-  const handleEditCriteria = useCallback((targetStep: number) => {
-    setIsLaunched(false);
-    setStep(targetStep);
-  }, []);
+  // Redirect logged-in users who have completed onboarding to dashboard
+  useEffect(() => {
+    if (!authLoading && user) {
+      // Check if user has completed onboarding
+      const submission = localStorage.getItem('riplacer_onboarding_submission');
+      if (submission) {
+        // User already completed onboarding, redirect to dashboard
+        navigate('/app');
+      }
+    }
+  }, [user, authLoading, navigate]);
 
   // Show loading state while checking auth
   if (authLoading) {
@@ -372,10 +277,8 @@ export function OnboardingPage() {
     );
   }
 
-  // Unified layout - same shell for onboarding and workspace
-  // Hide map for settings tab
-  const showMap = isLaunched ? activeTab !== 'settings' : step >= 3;
-  const showFullHeader = isLaunched || step >= 2;
+  // Unified layout for onboarding only
+  const showFullHeader = step >= 2;
 
   // Onboarding steps for sidebar
   const onboardingSteps = [
@@ -383,14 +286,9 @@ export function OnboardingPage() {
     { num: 2, label: 'Territory' },
     { num: 3, label: 'Buyers' },
     { num: 4, label: 'Competitors' },
-    { num: 5, label: 'Launch' },
-  ];
-
-  // Workspace nav items
-  const workspaceNavItems: { id: WorkspaceTab; label: string; icon: typeof Search; count?: number }[] = [
-    { id: 'discovery', label: 'Discovery', icon: Search },
-    { id: 'saved', label: 'Saved Leads', icon: Star, count: 0 },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { num: 5, label: 'Target' },
+    { num: 6, label: 'Context' },
+    { num: 7, label: 'Review' },
   ];
 
   return (
@@ -412,7 +310,7 @@ export function OnboardingPage() {
             <Link 
               to={user ? '/start' : '/'}
               className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center hover:bg-primary/90 transition-colors flex-shrink-0"
-              title={user ? 'Go to Workspace' : 'Go to Home'}
+              title={user ? 'Go to Setup' : 'Go to Home'}
             >
               <Crosshair className="w-5 h-5 text-white" strokeWidth={2.5} />
             </Link>
@@ -423,7 +321,7 @@ export function OnboardingPage() {
             )}
           </div>
           
-          {/* Menu Items - conditional based on isLaunched */}
+          {/* Menu Items */}
           <div className={cn(
             "flex-1",
             sidebarExpanded ? "w-full px-4" : "w-full flex flex-col items-center"
@@ -431,166 +329,61 @@ export function OnboardingPage() {
             <nav className={cn(
               sidebarExpanded ? "space-y-1" : "space-y-2 flex flex-col items-center"
             )}>
-              {isLaunched ? (
-                <>
-                  {/* Search Criteria - collapsible */}
-                  <div className="mb-2">
-                    <button
-                      onClick={() => {
-                        // First expand sidebar if collapsed
-                        if (!sidebarExpanded) {
-                          setSidebarExpanded(true);
-                          // Wait for sidebar animation, then expand criteria
-                          setTimeout(() => setSearchCriteriaExpanded(true), 300);
-                        } else {
-                          // Toggle criteria expansion
-                          setSearchCriteriaExpanded(!searchCriteriaExpanded);
-                        }
-                      }}
-                      className={cn(
-                        "transition-all duration-200 w-full text-left",
-                        sidebarExpanded 
-                          ? "flex items-center gap-3 px-3 py-2 rounded-lg text-sm bg-gray-50 border border-gray-200 hover:bg-gray-100"
-                          : "w-10 h-10 flex items-center justify-center rounded-lg bg-gray-50 border border-gray-200"
-                      )}
-                      title={sidebarExpanded ? undefined : 'Search Criteria'}
-                    >
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center bg-white border border-gray-200 flex-shrink-0">
-                        <SlidersHorizontal className="w-3.5 h-3.5 text-gray-600" />
-                      </div>
-                      {sidebarExpanded && (
-                        <>
-                          <span className="text-gray-700 flex-1">Search Criteria</span>
-                          {searchCriteriaExpanded ? (
-                            <ChevronUp className="w-4 h-4 text-gray-400" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 text-gray-400" />
-                          )}
-                        </>
-                      )}
-                    </button>
-                    
-                    {/* Expanded criteria - edit links */}
-                    {sidebarExpanded && searchCriteriaExpanded && (
-                      <div className="mt-1 ml-3 pl-3 border-l border-gray-200 space-y-1">
-                        {onboardingSteps.slice(0, 4).map((item) => (
-                          <button
-                            key={item.num}
-                            onClick={() => {
-                              setIsLaunched(false);
-                              setStep(item.num);
-                            }}
-                            className="w-full text-left px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded transition-colors"
-                          >
-                            {item.label}
-                          </button>
-                        ))}
-                      </div>
+              {onboardingSteps.map((item) => {
+                const isClickable = item.num <= step;
+                const isCurrentStep = step === item.num;
+                
+                return (
+                  <button
+                    key={item.num}
+                    onClick={() => {
+                      if (isClickable) {
+                        setStep(item.num);
+                      }
+                    }}
+                    disabled={!isClickable}
+                    className={cn(
+                      "transition-all duration-200 w-full text-left",
+                      sidebarExpanded 
+                        ? "flex items-center gap-3 px-3 py-2 rounded-lg text-sm"
+                        : "w-8 h-8 flex items-center justify-center rounded-md",
+                      isClickable 
+                        ? "hover:bg-gray-50 cursor-pointer" 
+                        : "cursor-not-allowed opacity-50",
+                      isCurrentStep && sidebarExpanded
+                        ? "bg-primary/10 text-primary font-medium"
+                        : ""
                     )}
-                  </div>
-
-                  {/* Main nav items */}
-                  {workspaceNavItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = activeTab === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => setActiveTab(item.id)}
-                        className={cn(
-                          "transition-all duration-200 w-full text-left",
-                          sidebarExpanded 
-                            ? "flex items-center gap-3 px-3 py-2 rounded-lg text-sm"
-                            : "w-10 h-10 flex items-center justify-center rounded-lg",
-                          isActive
-                            ? "bg-primary/10 text-primary"
-                            : "hover:bg-gray-50 text-gray-600"
-                        )}
-                        title={sidebarExpanded ? undefined : item.label}
-                      >
-                        <div className={cn(
-                          "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0",
-                          isActive
-                            ? "bg-primary text-white"
-                            : "bg-gray-100 border border-gray-200 text-gray-500"
-                        )}>
-                          <Icon className="w-3.5 h-3.5" />
-                        </div>
-                        {sidebarExpanded && (
-                          <>
-                            <span className={cn(
-                              "flex-1",
-                              isActive ? "font-medium text-primary" : "text-gray-700"
-                            )}>{item.label}</span>
-                            {item.count !== undefined && (
-                              <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
-                                {item.count}
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </button>
-                    );
-                  })}
-                </>
-              ) : (
-                /* Onboarding steps */
-                onboardingSteps.map((item) => {
-                  const isClickable = item.num <= step;
-                  const isCurrentStep = step === item.num;
-                  
-                  return (
-                    <button
-                      key={item.num}
-                      onClick={() => {
-                        if (isClickable) {
-                          setStep(item.num);
-                        }
-                      }}
-                      disabled={!isClickable}
-                      className={cn(
-                        "transition-all duration-200 w-full text-left",
-                        sidebarExpanded 
-                          ? "flex items-center gap-3 px-3 py-2 rounded-lg text-sm"
-                          : "w-8 h-8 flex items-center justify-center rounded-md",
-                        isClickable 
-                          ? "hover:bg-gray-50 cursor-pointer" 
-                          : "cursor-not-allowed opacity-50",
-                        isCurrentStep && sidebarExpanded
-                          ? "bg-primary/10 text-primary font-medium"
-                          : ""
-                      )}
-                      title={sidebarExpanded ? undefined : item.label}
-                    >
-                      <div className={cn(
-                        "rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 transition-all",
-                        sidebarExpanded ? "w-6 h-6" : "w-7 h-7",
+                    title={sidebarExpanded ? undefined : item.label}
+                  >
+                    <div className={cn(
+                      "rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 transition-all",
+                      sidebarExpanded ? "w-6 h-6" : "w-7 h-7",
+                      isCurrentStep
+                        ? "bg-primary text-white shadow-sm" 
+                        : item.num < step
+                          ? sidebarExpanded
+                            ? "bg-gray-200 text-gray-700"
+                            : "bg-gray-100 text-gray-500 border border-gray-200"
+                          : sidebarExpanded
+                            ? "bg-gray-100 text-gray-400"
+                            : "bg-transparent text-gray-300 border border-gray-200"
+                    )}>
+                      {item.num}
+                    </div>
+                    {sidebarExpanded && (
+                      <span className={cn(
+                        "truncate",
                         isCurrentStep
-                          ? "bg-primary text-white shadow-sm" 
+                          ? "text-primary font-medium"
                           : item.num < step
-                            ? sidebarExpanded
-                              ? "bg-gray-200 text-gray-700"
-                              : "bg-gray-100 text-gray-500 border border-gray-200"
-                            : sidebarExpanded
-                              ? "bg-gray-100 text-gray-400"
-                              : "bg-transparent text-gray-300 border border-gray-200"
-                      )}>
-                        {item.num}
-                      </div>
-                      {sidebarExpanded && (
-                        <span className={cn(
-                          "truncate",
-                          isCurrentStep
-                            ? "text-primary font-medium"
-                            : item.num < step
-                              ? "text-gray-700"
-                              : "text-gray-400"
-                        )}>{item.label}</span>
-                      )}
-                    </button>
-                  );
-                })
-              )}
+                            ? "text-gray-700"
+                            : "text-gray-400"
+                      )}>{item.label}</span>
+                    )}
+                  </button>
+                );
+              })}
             </nav>
           </div>
         </div>
@@ -611,139 +404,90 @@ export function OnboardingPage() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden w-full overflow-x-hidden">
-        {/* Header - SAME for both modes */}
+        {/* Header */}
         {showFullHeader && (
           <OnboardingHeader 
             data={data} 
-            step={isLaunched ? 5 : step}
+            step={step}
             user={user}
-            onEditDomain={() => {
-              if (isLaunched) {
-                setIsLaunched(false);
-              }
-              setStep(1);
-            }}
             onEditTerritory={() => {
-              if (isLaunched) {
-                setIsLaunched(false);
-              }
               setStep(2);
+            }}
+            onEditBuyers={() => {
+              setStep(3);
             }}
           />
         )}
 
         {/* Content Area */}
-        {isLaunched && showMap ? (
-          /* Workspace: Resizable panels for content + map */
-          <ResizablePanelGroup 
-            direction="horizontal" 
-            className="flex-1 min-h-0 w-full overflow-hidden"
-            style={{ width: '100%' }}
-          >
-            <ResizablePanel defaultSize={50} minSize={30} className="flex flex-col relative z-10 min-w-0">
-              {activeTab === 'discovery' && (
-                <DiscoveryV2Tab 
-                  criteria={discoveryCriteria}
-                  onProspectSelect={handleProspectSelect}
-                  onProspectsChange={handleProspectsChange}
-                  selectedProspectId={selectedProspectId}
-                />
-              )}
-              {activeTab === 'saved' && (
-                <SavedLeadsTab />
-              )}
-              {activeTab === 'settings' && (
-                <SettingsTab data={data} onEditCriteria={handleEditCriteria} />
-              )}
-            </ResizablePanel>
-            <ResizableHandle withHandle className="bg-gray-200 hover:bg-gray-300 transition-colors flex-shrink-0" />
-            <ResizablePanel defaultSize={50} minSize={20} className="bg-gray-100 relative min-w-0 overflow-hidden">
-              <LazyOnboardingMap 
+        <div className={cn(
+          "flex-1 flex min-h-0 relative z-0"
+        )}>
+          {/* Background pattern - only for onboarding non-step-1 screens */}
+          {step !== 1 && (
+            <div className="dotted-bg dotted-bg-gentle-float" />
+          )}
+          
+          {/* Content */}
+          <div className="flex-1 flex flex-col relative z-10 w-full">
+            {step === 1 && (
+              <StepWhatYouSell 
                 data={data} 
-                step={5} 
-                prospects={mapProspects}
-                selectedProspectId={selectedProspectId}
-                onProspectClick={(id) => setSelectedProspectId(id)}
-                onMapClick={() => setSelectedProspectId(null)}
+                updateData={updateData} 
+                onNext={nextStep}
               />
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        ) : isLaunched && !showMap ? (
-          /* Workspace: Settings tab (no map) */
-          <div className="flex-1 flex flex-col relative z-10">
-            <SettingsTab data={data} onEditCriteria={handleEditCriteria} />
-          </div>
-        ) : (
-          /* Onboarding: Fixed layout */
-          <div className={cn(
-            "flex-1 flex min-h-0 relative z-0",
-            step === 1 ? "" : !showMap && "items-center justify-center"
-          )}>
-            {/* Background pattern - only for onboarding non-map steps */}
-            {!showMap && step !== 1 && (
-              <div className="dotted-bg dotted-bg-gentle-float" />
             )}
-            
-            {/* Left Panel - Content */}
-            <div className={cn(
-              "transition-all duration-300 flex flex-col relative z-10",
-              step === 1 
-                ? "w-full"
-                : showMap 
-                  ? "w-1/2 border-r border-gray-200 overflow-y-auto"
-                  : "w-full max-w-2xl mx-auto px-8"
-            )}>
-              {step === 1 && (
-                <StepWhatYouSell 
-                  data={data} 
-                  updateData={updateData} 
-                  onNext={nextStep}
-                />
-              )}
-              {step === 2 && (
-                <StepWhereYouSell 
-                  data={data} 
-                  updateData={updateData} 
-                  onNext={nextStep}
-                  onBack={prevStep}
-                />
-              )}
-              {step === 3 && (
-                <StepWhoYouSellTo 
-                  data={data} 
-                  updateData={updateData} 
-                  onNext={nextStep}
-                  onBack={prevStep}
-                />
-              )}
-              {step === 4 && (
-                <StepCompetitors 
-                  data={data} 
-                  updateData={updateData} 
-                  onNext={nextStep}
-                  onBack={prevStep}
-                />
-              )}
-              {step === 5 && (
-                <StepResults 
-                  data={data}
-                  updateData={updateData}
-                  onComplete={handleLaunch}
-                  onBack={prevStep}
-                  isSaving={isSaving}
-                  isWorkspaceMode={false}
-                />
-              )}
-            </div>
-
-            {/* Right Panel - Map */}
-            {showMap && (
-              <div className="w-1/2 bg-gray-100 relative min-w-0 overflow-hidden">
-                <LazyOnboardingMap data={data} step={step} />
-              </div>
+            {step === 2 && (
+              <StepWhereYouSell 
+                data={data} 
+                updateData={updateData} 
+                onNext={nextStep}
+                onBack={prevStep}
+              />
+            )}
+            {step === 3 && (
+              <StepWhoYouSellTo 
+                data={data} 
+                updateData={updateData} 
+                onNext={nextStep}
+                onBack={prevStep}
+              />
+            )}
+            {step === 4 && (
+              <StepCompetitors 
+                data={data} 
+                updateData={updateData} 
+                onNext={nextStep}
+                onBack={prevStep}
+              />
+            )}
+            {step === 5 && (
+              <StepTargetAccount
+                data={data}
+                updateData={updateData}
+                onNext={nextStep}
+                onBack={prevStep}
+              />
+            )}
+            {step === 6 && (
+              <StepAdditionalContext
+                data={data}
+                updateData={updateData}
+                onNext={nextStep}
+                onBack={prevStep}
+              />
+            )}
+            {step === 7 && (
+              <StepResults
+                data={data}
+                onComplete={handleSubmit}
+                onBack={prevStep}
+                onEditStep={(targetStep) => setStep(targetStep)}
+                isSaving={isSaving}
+              />
             )}
           </div>
-        )}
+        </div>
       </main>
     </div>
   );

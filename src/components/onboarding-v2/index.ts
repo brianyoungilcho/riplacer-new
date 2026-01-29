@@ -4,6 +4,7 @@ export { StepWhatYouSell } from './StepWhatYouSell';
 export { StepWhereYouSell } from './StepWhereYouSell';
 export { StepWhoYouSellTo } from './StepWhoYouSellTo';
 export { StepCompetitors } from './StepCompetitors';
+export { StepTargetAccount } from './StepTargetAccount';
+export { StepAdditionalContext } from './StepAdditionalContext';
 export { StepResults } from './StepResults';
 export { WorkspaceSidebar } from './WorkspaceSidebar';
-export { LazyOnboardingMap } from './LazyOnboardingMap';
