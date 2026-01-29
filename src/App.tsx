@@ -25,6 +25,7 @@ const CookiePolicy = lazy(() => import("./pages/CookiePolicy"));
 const AcceptableUsePolicy = lazy(() => import("./pages/AcceptableUsePolicy"));
 const Disclaimer = lazy(() => import("./pages/Disclaimer"));
 const RefundPolicy = lazy(() => import("./pages/RefundPolicy"));
+const Pricing = lazy(() => import("./pages/Pricing"));
 
 const queryClient = new QueryClient();
 
@@ -68,10 +69,10 @@ const App = () => {
               <Routes>
                 {/* Root route: Dashboard on app subdomain, Landing page on main domain */}
                 <Route path="/" element={onAppSubdomain ? <Dashboard /> : <Index />} />
-                
+
                 {/* Auth - works on both domains */}
                 <Route path="/auth" element={<Auth />} />
-                
+
                 {/* Main domain only routes (marketing, onboarding) */}
                 {!onAppSubdomain && (
                   <>
@@ -83,12 +84,13 @@ const App = () => {
                     <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
                     <Route path="/disclaimer" element={<Disclaimer />} />
                     <Route path="/refund" element={<RefundPolicy />} />
+                    <Route path="/pricing" element={<Pricing />} />
                   </>
                 )}
-                
+
                 {/* Legacy /app route - works on both domains for backwards compatibility */}
                 <Route path="/app" element={<Dashboard />} />
-                
+
                 {/* 404 */}
                 <Route path="*" element={<NotFound />} />
               </Routes>

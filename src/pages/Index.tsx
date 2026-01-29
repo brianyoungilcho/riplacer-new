@@ -36,6 +36,11 @@ function LandingPage() {
           </Link>
           <div className="flex items-center gap-2">
             <div className="hidden md:flex items-center gap-4">
+              <Link to="/pricing">
+                <Button variant="ghost" className="text-gray-400 hover:text-white hover:bg-white/5">
+                  Pricing
+                </Button>
+              </Link>
               <Link to="/auth">
                 <Button variant="ghost" className="text-gray-400 hover:text-white hover:bg-white/5">
                   Sign In
@@ -62,6 +67,11 @@ function LandingPage() {
         {isMenuOpen && (
           <div className="md:hidden border-t border-white/5 bg-[#0F1115]/95 backdrop-blur-md">
             <div className="container mx-auto px-4 py-3 flex flex-col gap-2">
+              <Link to="/pricing" onClick={() => setIsMenuOpen(false)}>
+                <Button variant="ghost" className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/5">
+                  Pricing
+                </Button>
+              </Link>
               <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
                 <Button variant="ghost" className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/5">
                   Sign In
@@ -388,8 +398,8 @@ function LandingPage() {
             ].map((item, i) => (
               <div key={i} className="flex flex-col md:flex-row gap-6 items-start md:items-center">
                 <div className={`w-16 h-16 rounded-full flex items-center justify-center shrink-0 text-2xl font-bold ${item.highlight
-                    ? 'bg-primary text-white'
-                    : 'bg-white text-gray-900'
+                  ? 'bg-primary text-white'
+                  : 'bg-white text-gray-900'
                   }`}>
                   {item.step}
                 </div>
