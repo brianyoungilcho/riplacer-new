@@ -89,7 +89,7 @@ function LandingPage() {
                 <span className="text-primary font-bold uppercase tracking-wide text-xs">Force Multiplier</span>
                 <span className="text-gray-400 ml-2 text-xs">For elite government sales reps</span>
               </div>
-              
+
               {/* Main headline */}
               <h1 className="text-5xl sm:text-6xl md:text-6xl lg:text-7xl font-extrabold leading-[1.1] tracking-tight">
                 Rip out your{" "}
@@ -97,7 +97,7 @@ function LandingPage() {
                 competition.{" "}
                 <span className="text-primary">Win.</span>
               </h1>
-              
+
               <div className="space-y-2">
                 <p className="text-lg text-gray-400 leading-relaxed max-w-2xl">
                   <span className="font-semibold text-white">Sales is human. The grunt work shouldn't be.</span>
@@ -106,7 +106,7 @@ function LandingPage() {
                   Your AI Chief of Staff reads every city council PDF, tracks every budget vote, and maps the politics. You get the intel to close the deal.
                 </p>
               </div>
-              
+
               <div className="flex flex-col items-start gap-4 pt-2">
                 <Link to="/start" onMouseEnter={preloadOnboarding}>
                   <Button variant="glow" size="xl">
@@ -114,7 +114,7 @@ function LandingPage() {
                     <ArrowRight className="w-5 h-5" />
                   </Button>
                 </Link>
-                
+
                 {/* Social proof */}
                 <div className="flex items-center gap-3 px-1">
                   <div className="flex -space-x-2">
@@ -162,20 +162,20 @@ function LandingPage() {
             <div className="lg:w-[35%] relative flex justify-start">
               {/* Glow effect */}
               <div className="absolute -inset-8 bg-primary/20 blur-3xl rounded-full opacity-40" />
-              
+
               {/* iPhone 15 Pro frame - cropped to show top half */}
               <div className="relative w-full max-w-[390px] bg-[#1d1d1f] rounded-t-[3.5rem] p-2.5 shadow-2xl overflow-hidden" style={{ boxShadow: '0 0 0 12px #1d1d1f, 0 0 60px rgba(0,0,0,0.8)' }}>
                 {/* Screen - cropped height showing top portion */}
                 <div className="bg-white rounded-t-[3rem] overflow-hidden relative" style={{ height: '420px' }}>
                   {/* Dynamic Island */}
                   <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-[126px] h-[37px] bg-black rounded-full z-50" />
-                  
+
                   {/* Gmail Header with Red */}
                   <div className="bg-[#c5221f] px-6 pt-16 pb-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                          <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
                         </svg>
                         <span className="text-white text-[22px] font-normal">Primary</span>
                       </div>
@@ -206,7 +206,7 @@ function LandingPage() {
                           </div>
                         </div>
                         <svg className="w-6 h-6 text-gray-400 flex-shrink-0 mt-1" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                         </svg>
                       </div>
                     </div>
@@ -230,14 +230,14 @@ function LandingPage() {
                           </div>
                         </div>
                         <svg className="w-6 h-6 text-gray-400 flex-shrink-0 mt-1" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                         </svg>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-              
+
               {/* Floating status - positioned on left side */}
               <div className="absolute -bottom-4 left-2 sm:-left-6 bg-[#0F1115] border border-gray-700 px-4 py-3 rounded-lg shadow-2xl flex items-center gap-2.5">
                 <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
@@ -387,11 +387,10 @@ function LandingPage() {
               { step: '3', title: 'You wake up to Intel.', desc: 'Receive a "Morning Briefing" in your inbox. No noise. Just opportunities where displacement is possible.' },
             ].map((item, i) => (
               <div key={i} className="flex flex-col md:flex-row gap-6 items-start md:items-center">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center shrink-0 text-2xl font-bold ${
-                  item.highlight 
-                    ? 'bg-primary text-white' 
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center shrink-0 text-2xl font-bold ${item.highlight
+                    ? 'bg-primary text-white'
                     : 'bg-white text-gray-900'
-                }`}>
+                  }`}>
                   {item.step}
                 </div>
                 <div>
@@ -415,9 +414,9 @@ function LandingPage() {
               Your competitors are getting comfortable. Use AI to find their weak spots and take their accounts.
             </p>
             <Link to="/start" onMouseEnter={preloadOnboarding}>
-              <Button 
-                variant="secondary" 
-                size="xl" 
+              <Button
+                variant="secondary"
+                size="xl"
                 className="bg-white text-primary hover:bg-gray-100 shadow-xl"
               >
                 Start Ripping
@@ -496,25 +495,6 @@ function LandingPage() {
 }
 
 export default function Index() {
-  const { user, loading: authLoading } = useAuth();
-  const { profile, loading: profileLoading } = useProfile();
-  const navigate = useNavigate();
-
-  // Redirect logged-in users appropriately
-  useEffect(() => {
-    if (user && !profileLoading) {
-      navigate('/start');
-    }
-  }, [user, profileLoading, navigate]);
-
-  // Show loading only for authenticated users checking profile
-  if (user && (authLoading || profileLoading)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
+  // Allow all users (logged in or not) to view the landing page
   return <LandingPage />;
 }

@@ -5,8 +5,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { OnboardingData } from '../OnboardingPage';
 import { useAuth } from '@/hooks/useAuth';
-import { 
-  Loader2, 
+import {
+  Loader2,
   Check,
   X,
   Plus,
@@ -76,7 +76,7 @@ export function SettingsTab({ data, onEditCriteria }: SettingsTabProps) {
     localStorage.setItem('riplacer_settings', JSON.stringify({
       companyName,
     }));
-    
+
     await new Promise(resolve => setTimeout(resolve, 500));
     setSaving(false);
     toast.success('Settings saved');
@@ -93,7 +93,7 @@ export function SettingsTab({ data, onEditCriteria }: SettingsTabProps) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-2xl space-y-6">
-          
+
           {/* Account Section */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100">
@@ -114,7 +114,10 @@ export function SettingsTab({ data, onEditCriteria }: SettingsTabProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={signOut}
+                    onClick={async () => {
+                      await signOut();
+                      window.location.href = '/';
+                    }}
                     className="text-gray-600"
                   >
                     Sign Out

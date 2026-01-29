@@ -20,17 +20,17 @@ export interface OnboardingData {
   productDescription: string;
   companyName?: string;
   companyDomain?: string;
-  
+
   // Step 2
   region?: string;
   states: string[];
   cities: string[];
   territoryDescription?: string;
   isCustomTerritory?: boolean; // true if user described territory instead of selecting states
-  
+
   // Step 3
   targetCategories: string[];
-  
+
   // Step 4
   competitors: string[];
   suggestedCompetitors?: string[]; // AI-suggested competitors (from early research)
@@ -45,7 +45,7 @@ export interface OnboardingData {
 
   // Step 7
   email?: string;
-  
+
   // Filters (derived from selections)
   filters: string[];
 }
@@ -67,7 +67,7 @@ export function OnboardingPage() {
   const [data, setData] = useState<OnboardingData>(initialData);
   const [isSaving, setIsSaving] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
-  
+
   // Track previous step and product description to detect when user goes back to modify product
   const prevStepRef = useRef<number>(1);
   const prevProductDescriptionRef = useRef<string>('');
@@ -98,7 +98,7 @@ export function OnboardingPage() {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
-    
+
     // Debounce localStorage writes by 500ms
     saveTimeoutRef.current = setTimeout(() => {
       try {
@@ -118,25 +118,25 @@ export function OnboardingPage() {
   const updateData = useCallback((updates: Partial<OnboardingData>) => {
     setData(prev => ({ ...prev, ...updates }));
   }, []);
-  
+
   // Detect when user navigates back to step 1 from a later step
   // Clear competitor suggestions so they can be re-fetched if product changes
   useEffect(() => {
     const prevStep = prevStepRef.current;
-    
+
     // If user navigated back to step 1 from step 2+
     if (step === 1 && prevStep > 1) {
       console.log('🔄 [Frontend] User navigated back to step 1 from step', prevStep, '- clearing competitor suggestions');
-      updateData({ 
+      updateData({
         suggestedCompetitors: undefined,
         competitorResearchLoading: false,
         competitorResearchFailed: false,
       });
     }
-    
+
     prevStepRef.current = step;
   }, [step, updateData]);
-  
+
   // Trigger early competitor research when Step 1 is completed
   // This runs in the background so suggestions are ready by Step 4
   // Also re-runs if product description changed after user went back to edit
@@ -149,21 +149,21 @@ export function OnboardingPage() {
       //    a. We haven't already loaded suggestions, OR
       //    b. The product description changed (user went back and modified it)
       // 4. We're not already loading
-      const productDescriptionChanged = 
-        prevProductDescriptionRef.current && 
+      const productDescriptionChanged =
+        prevProductDescriptionRef.current &&
         prevProductDescriptionRef.current !== data.productDescription;
-      
-      const shouldTrigger = 
-        step >= 2 && 
-        data.productDescription && 
+
+      const shouldTrigger =
+        step >= 2 &&
+        data.productDescription &&
         !data.competitorResearchLoading &&
         (!data.suggestedCompetitors || productDescriptionChanged);
-      
+
       if (shouldTrigger) {
         // If product description changed, clear old suggestions first
         if (productDescriptionChanged) {
           console.log('🔄 [Frontend] Product description changed - clearing old competitor suggestions');
-          updateData({ 
+          updateData({
             suggestedCompetitors: undefined,
             competitorResearchLoading: true,
             competitorResearchFailed: false,
@@ -171,55 +171,55 @@ export function OnboardingPage() {
         } else {
           updateData({ competitorResearchLoading: true });
         }
-        
+
         try {
           console.log('🔍 [Frontend] Triggering competitor research for:', {
             productDescription: data.productDescription,
             companyDomain: data.companyDomain,
             productDescriptionChanged,
           });
-          
+
           const { data: response, error } = await supabase.functions.invoke('research-competitors', {
             body: {
               productDescription: data.productDescription,
               companyDomain: data.companyDomain,
             }
           });
-          
+
           if (error) {
             console.error('Competitor research API error:', error);
             updateData({ competitorResearchLoading: false });
             return;
           }
-          
+
           console.log('✅ [Frontend] Competitor research response:', response);
-          
+
           if (response?.competitors && Array.isArray(response.competitors) && response.competitors.length > 0) {
-            updateData({ 
-              suggestedCompetitors: response.competitors, 
+            updateData({
+              suggestedCompetitors: response.competitors,
               competitorResearchLoading: false,
               competitorResearchFailed: false,
             });
           } else {
             // Mark as finished (and possibly failed) so UI can communicate clearly
-            updateData({ 
+            updateData({
               competitorResearchLoading: false,
               competitorResearchFailed: !!response?.error,
             });
           }
-          
+
         } catch (error) {
           console.error('Failed to fetch competitor suggestions:', error);
           updateData({ competitorResearchLoading: false });
         }
       }
-      
+
       // Update the ref to track product description for next comparison
       if (data.productDescription) {
         prevProductDescriptionRef.current = data.productDescription;
       }
     };
-    
+
     triggerCompetitorResearch();
   }, [step, data.productDescription, data.companyDomain, data.suggestedCompetitors, data.competitorResearchLoading, updateData]);
 
@@ -279,7 +279,7 @@ export function OnboardingPage() {
         }
       }
     };
-    
+
     redirectToDashboard();
   }, [user, authLoading]);
 
@@ -322,17 +322,10 @@ export function OnboardingPage() {
             "flex items-center mb-6",
             sidebarExpanded ? "px-4 gap-2.5" : "justify-center"
           )}>
-            <Link 
-              to={user ? '/start' : '/'}
-              onClick={(e) => {
-                const targetPath = user ? '/start' : '/';
-                if (location.pathname === targetPath) {
-                  e.preventDefault();
-                  window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-                }
-              }}
+            <Link
+              to="/"
               className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center hover:bg-primary/90 transition-colors flex-shrink-0"
-              title={user ? 'Go to Setup' : 'Go to Home'}
+              title="Go to Home"
             >
               <Crosshair className="w-5 h-5 text-white" strokeWidth={2.5} />
             </Link>
@@ -342,7 +335,7 @@ export function OnboardingPage() {
               </span>
             )}
           </div>
-          
+
           {/* Menu Items */}
           <div className={cn(
             "flex-1",
@@ -354,7 +347,7 @@ export function OnboardingPage() {
               {onboardingSteps.map((item) => {
                 const isClickable = item.num <= step;
                 const isCurrentStep = step === item.num;
-                
+
                 return (
                   <button
                     key={item.num}
@@ -366,11 +359,11 @@ export function OnboardingPage() {
                     disabled={!isClickable}
                     className={cn(
                       "transition-all duration-200 w-full text-left",
-                      sidebarExpanded 
+                      sidebarExpanded
                         ? "flex items-center gap-3 px-3 py-2 rounded-lg text-sm"
                         : "w-8 h-8 flex items-center justify-center rounded-md",
-                      isClickable 
-                        ? "hover:bg-gray-50 cursor-pointer" 
+                      isClickable
+                        ? "hover:bg-gray-50 cursor-pointer"
                         : "cursor-not-allowed opacity-50",
                       isCurrentStep && sidebarExpanded
                         ? "bg-primary/10 text-primary font-medium"
@@ -382,7 +375,7 @@ export function OnboardingPage() {
                       "rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 transition-all",
                       sidebarExpanded ? "w-6 h-6" : "w-7 h-7",
                       isCurrentStep
-                        ? "bg-primary text-white shadow-sm" 
+                        ? "bg-primary text-white shadow-sm"
                         : item.num < step
                           ? sidebarExpanded
                             ? "bg-gray-200 text-gray-700"
@@ -409,7 +402,7 @@ export function OnboardingPage() {
             </nav>
           </div>
         </div>
-        
+
         {/* Toggle Button */}
         <button
           onClick={() => setSidebarExpanded(!sidebarExpanded)}
@@ -428,8 +421,8 @@ export function OnboardingPage() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden w-full overflow-x-hidden">
         {/* Header */}
         {showFullHeader && (
-          <OnboardingHeader 
-            data={data} 
+          <OnboardingHeader
+            data={data}
             step={step}
             user={user}
             onEditTerritory={() => {
@@ -449,36 +442,36 @@ export function OnboardingPage() {
           {step !== 1 && (
             <div className="dotted-bg dotted-bg-gentle-float" />
           )}
-          
+
           {/* Content */}
           <div className="flex-1 flex flex-col relative z-10 w-full">
             {step === 1 && (
-              <StepWhatYouSell 
-                data={data} 
-                updateData={updateData} 
+              <StepWhatYouSell
+                data={data}
+                updateData={updateData}
                 onNext={nextStep}
               />
             )}
             {step === 2 && (
-              <StepWhereYouSell 
-                data={data} 
-                updateData={updateData} 
+              <StepWhereYouSell
+                data={data}
+                updateData={updateData}
                 onNext={nextStep}
                 onBack={prevStep}
               />
             )}
             {step === 3 && (
-              <StepWhoYouSellTo 
-                data={data} 
-                updateData={updateData} 
+              <StepWhoYouSellTo
+                data={data}
+                updateData={updateData}
                 onNext={nextStep}
                 onBack={prevStep}
               />
             )}
             {step === 4 && (
-              <StepCompetitors 
-                data={data} 
-                updateData={updateData} 
+              <StepCompetitors
+                data={data}
+                updateData={updateData}
                 onNext={nextStep}
                 onBack={prevStep}
               />
