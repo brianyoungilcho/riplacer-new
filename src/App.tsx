@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { SubdomainRedirect } from "@/components/SubdomainRedirect";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import { Loader2 } from "lucide-react";
 
 // Eagerly load the landing page (most common entry point)
@@ -44,6 +45,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <SubdomainRedirect />
+          <ScrollToTop />
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/" element={<Index />} />

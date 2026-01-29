@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowRight, Crosshair, Eye, Users, TrendingUp, X, Check, Zap } from 'lucide-react';
+import { Loader2, ArrowRight, Crosshair, Eye, Users, TrendingUp, X, Check, Zap, Menu } from 'lucide-react';
 
 // Preload the onboarding page when user hovers over CTA buttons
 const preloadOnboarding = () => {
@@ -11,39 +11,69 @@ const preloadOnboarding = () => {
 };
 
 function LandingPage() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header - Dark */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#0F1115]/95 backdrop-blur-md border-b border-white/5">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="container mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
               <Zap className="w-5 h-5 text-white" strokeWidth={2.5} />
             </div>
             <span className="font-bold text-xl tracking-tight text-white">Riplacer</span>
           </Link>
-          <div className="flex items-center gap-4">
-            <Link to="/auth">
-              <Button variant="ghost" className="text-gray-400 hover:text-white hover:bg-white/5">
-                Sign In
-              </Button>
-            </Link>
-            <Link to="/start" onMouseEnter={preloadOnboarding}>
-              <Button variant="glow" size="lg">
-                Get Started
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
+          <div className="flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-4">
+              <Link to="/auth">
+                <Button variant="ghost" className="text-gray-400 hover:text-white hover:bg-white/5">
+                  Sign In
+                </Button>
+              </Link>
+              <Link to="/start" onMouseEnter={preloadOnboarding}>
+                <Button variant="glow" size="lg">
+                  Get Started
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </Link>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen((open) => !open)}
+              aria-expanded={isMenuOpen}
+              aria-label="Toggle navigation menu"
+              className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-md text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
+            >
+              {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
         </div>
+        {isMenuOpen && (
+          <div className="md:hidden border-t border-white/5 bg-[#0F1115]/95 backdrop-blur-md">
+            <div className="container mx-auto px-4 py-3 flex flex-col gap-2">
+              <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
+                <Button variant="ghost" className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/5">
+                  Sign In
+                </Button>
+              </Link>
+              <Link to="/start" onMouseEnter={preloadOnboarding} onClick={() => setIsMenuOpen(false)}>
+                <Button variant="glow" className="w-full justify-between">
+                  Get Started
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Hero Section - Dark */}
-      <section className="pt-32 pb-20 lg:pt-40 lg:pb-32 relative overflow-hidden bg-[#0F1115] text-white">
-        <div className="container mx-auto px-6 relative">
+      <section className="pt-24 sm:pt-28 pb-16 sm:pb-20 lg:pt-40 lg:pb-32 relative overflow-hidden bg-[#0F1115] text-white">
+        <div className="container mx-auto px-4 sm:px-6 relative">
           <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-10 max-w-7xl mx-auto">
             {/* Left side - Copy */}
-            <div className="lg:w-[60%] space-y-8">
+            <div className="lg:w-[65%] space-y-8 max-w-none">
               {/* Badge */}
               <div className="inline-flex items-center px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm">
                 <span className="text-primary font-bold uppercase tracking-wide text-xs">Force Multiplier</span>
@@ -51,7 +81,7 @@ function LandingPage() {
               </div>
               
               {/* Main headline */}
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-[1.1] tracking-tight">
+              <h1 className="text-5xl sm:text-6xl md:text-6xl lg:text-7xl font-extrabold leading-[1.1] tracking-tight">
                 Rip out your{" "}
                 <br className="hidden sm:block" />
                 competition.{" "}
@@ -59,15 +89,15 @@ function LandingPage() {
               </h1>
               
               <div className="space-y-2">
-                <p className="text-lg text-gray-400 leading-relaxed max-w-lg">
+                <p className="text-lg text-gray-400 leading-relaxed max-w-2xl">
                   <span className="font-semibold text-white">Sales is human. The grunt work shouldn't be.</span>
                 </p>
-                <p className="text-lg text-gray-400 leading-relaxed max-w-lg">
+                <p className="text-lg text-gray-400 leading-relaxed max-w-2xl">
                   Your AI Chief of Staff reads every city council PDF, tracks every budget vote, and maps the politics. You get the intel to close the deal.
                 </p>
               </div>
               
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pt-2">
+              <div className="flex flex-col items-start gap-4 pt-2">
                 <Link to="/start" onMouseEnter={preloadOnboarding}>
                   <Button variant="glow" size="xl">
                     Start Ripping
@@ -76,24 +106,55 @@ function LandingPage() {
                 </Link>
                 
                 {/* Social proof */}
-                <div className="flex items-center gap-3 px-4 py-3">
+                <div className="flex items-center gap-3 px-1">
                   <div className="flex -space-x-2">
-                    <div className="w-8 h-8 rounded-full bg-gray-600 border-2 border-[#0F1115]" />
-                    <div className="w-8 h-8 rounded-full bg-gray-500 border-2 border-[#0F1115]" />
-                    <div className="w-8 h-8 rounded-full bg-gray-400 border-2 border-[#0F1115]" />
+                    <div className="w-8 h-8 rounded-full bg-white border-2 border-[#0F1115] flex items-center justify-center overflow-hidden">
+                      <img
+                        src="https://rpkcwosacdsadclyhyuv.supabase.co/storage/v1/object/public/home/logo/logo_axon.png"
+                        alt="Axon"
+                        className="h-5 w-5 object-contain"
+                        loading="lazy"
+                      />
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-white border-2 border-[#0F1115] flex items-center justify-center overflow-hidden">
+                      <img
+                        src="https://rpkcwosacdsadclyhyuv.supabase.co/storage/v1/object/public/home/logo/logo_flock.png"
+                        alt="Flock"
+                        className="h-5 w-5 object-contain"
+                        loading="lazy"
+                      />
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-white border-2 border-[#0F1115] flex items-center justify-center overflow-hidden">
+                      <img
+                        src="https://rpkcwosacdsadclyhyuv.supabase.co/storage/v1/object/public/home/logo/logo_motorola.png"
+                        alt="Motorola"
+                        className="h-5 w-5 object-contain"
+                        loading="lazy"
+                      />
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-white border-2 border-[#0F1115] flex items-center justify-center overflow-hidden">
+                      <img
+                        src="https://rpkcwosacdsadclyhyuv.supabase.co/storage/v1/object/public/home/logo/logo_skydio.png"
+                        alt="Skydio"
+                        className="h-5 w-5 object-contain"
+                        loading="lazy"
+                      />
+                    </div>
                   </div>
-                  <span className="text-sm text-gray-400">Used by aggressive reps</span>
+                  <span className="text-sm text-gray-400">
+                    Used by aggressive reps from top companies
+                  </span>
                 </div>
               </div>
             </div>
 
             {/* Right side - Gmail iPhone Preview */}
-            <div className="lg:w-[40%] relative flex justify-start">
+            <div className="lg:w-[35%] relative flex justify-start">
               {/* Glow effect */}
               <div className="absolute -inset-8 bg-primary/20 blur-3xl rounded-full opacity-40" />
               
               {/* iPhone 15 Pro frame - cropped to show top half */}
-              <div className="relative w-[390px] bg-[#1d1d1f] rounded-t-[3.5rem] p-2.5 shadow-2xl overflow-hidden" style={{ boxShadow: '0 0 0 12px #1d1d1f, 0 0 60px rgba(0,0,0,0.8)' }}>
+              <div className="relative w-full max-w-[390px] bg-[#1d1d1f] rounded-t-[3.5rem] p-2.5 shadow-2xl overflow-hidden" style={{ boxShadow: '0 0 0 12px #1d1d1f, 0 0 60px rgba(0,0,0,0.8)' }}>
                 {/* Screen - cropped height showing top portion */}
                 <div className="bg-white rounded-t-[3rem] overflow-hidden relative" style={{ height: '420px' }}>
                   {/* Dynamic Island */}
@@ -168,7 +229,7 @@ function LandingPage() {
               </div>
               
               {/* Floating status - positioned on left side */}
-              <div className="absolute -bottom-4 -left-6 bg-[#0F1115] border border-gray-700 px-4 py-3 rounded-lg shadow-2xl flex items-center gap-2.5">
+              <div className="absolute -bottom-4 left-2 sm:-left-6 bg-[#0F1115] border border-gray-700 px-4 py-3 rounded-lg shadow-2xl flex items-center gap-2.5">
                 <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
                 <p className="text-sm font-semibold text-white">AI agent researching live</p>
               </div>
@@ -180,7 +241,7 @@ function LandingPage() {
 
       {/* The Riplacer Thesis - Light */}
       <section className="py-16 bg-gray-50 border-y border-gray-100">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-4xl mx-auto text-center">
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">The Riplacer Thesis</h2>
             <p className="text-xl md:text-2xl text-gray-600 leading-relaxed font-light">
@@ -193,9 +254,9 @@ function LandingPage() {
 
       {/* Features Section - Dark */}
       <section className="py-24 bg-[#0F1115] text-white">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-4 sm:px-6">
           <div className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className="text-3xl lg:text-4xl font-bold text-white mb-4">
+            <h2 className="text-3xl md:text-4xl lg:text-4xl font-bold text-white mb-4">
               Your unfair advantage
             </h2>
             <p className="text-lg text-gray-400">
@@ -242,9 +303,9 @@ function LandingPage() {
 
       {/* Comparison Section - Light */}
       <section className="py-24 bg-white">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-4 sm:px-6">
           <div className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className="text-3xl lg:text-5xl font-extrabold text-gray-900 mb-4">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-gray-900 mb-4">
               From grunt work to force multiplier
             </h2>
             <p className="text-lg text-gray-600">
@@ -254,7 +315,7 @@ function LandingPage() {
 
           <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-0 border-4 border-black rounded-3xl overflow-hidden shadow-2xl">
             {/* Average Rep */}
-            <div className="bg-gray-100 p-8 md:p-10 border-b md:border-b-0 md:border-r border-gray-300">
+            <div className="bg-gray-100 p-6 sm:p-8 md:p-10 border-b md:border-b-0 md:border-r border-gray-300">
               <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500 mb-6">The Average Rep</h3>
               <ul className="space-y-6">
                 {[
@@ -272,7 +333,7 @@ function LandingPage() {
             </div>
 
             {/* Riplacer Rep */}
-            <div className="bg-[#0F1115] p-8 md:p-10 text-white relative">
+            <div className="bg-[#0F1115] p-6 sm:p-8 md:p-10 text-white relative">
               <div className="absolute top-0 right-0 bg-primary text-white text-xs font-bold px-3 py-1 rounded-bl-lg">
                 SUPERHUMAN
               </div>
@@ -299,9 +360,9 @@ function LandingPage() {
 
       {/* How It Works - Dark */}
       <section id="how-it-works" className="py-24 bg-[#0F1115] text-white">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-4 sm:px-6">
           <div className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className="text-3xl lg:text-4xl font-bold text-white mb-4">
+            <h2 className="text-3xl md:text-4xl lg:text-4xl font-bold text-white mb-4">
               How it works
             </h2>
             <p className="text-lg text-gray-400">
@@ -335,9 +396,9 @@ function LandingPage() {
 
       {/* CTA Section - Full width gradient */}
       <section className="py-24 bg-gradient-to-br from-primary to-red-700 text-white relative overflow-hidden">
-        <div className="container mx-auto px-6 relative">
+        <div className="container mx-auto px-4 sm:px-6 relative">
           <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-4xl lg:text-5xl font-bold mb-6">
+            <h2 className="text-4xl md:text-5xl lg:text-5xl font-bold mb-6">
               Ready to rip & replace?
             </h2>
             <p className="text-xl text-red-100 mb-10 max-w-2xl mx-auto">
@@ -362,7 +423,7 @@ function LandingPage() {
 
       {/* Footer - Dark */}
       <footer className="py-12 bg-[#0F1115] text-white">
-        <div className="container mx-auto px-6">
+        <div className="container mx-auto px-4 sm:px-6">
           <div className="flex flex-col md:flex-row items-start justify-between gap-6">
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2.5">
@@ -375,7 +436,7 @@ function LandingPage() {
                 © {new Date().getFullYear()} Riplacer. Built for reps who win.
               </p>
             </div>
-            <div className="flex flex-wrap gap-x-8 gap-y-3">
+            <div className="flex flex-wrap gap-x-4 sm:gap-x-8 gap-y-3">
               <div>
                 <h4 className="text-xs font-semibold text-white uppercase tracking-wider mb-3">Legal</h4>
                 <ul className="space-y-2 text-sm">
