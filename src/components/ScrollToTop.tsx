@@ -4,71 +4,51 @@ import { useLocation, useNavigationType } from 'react-router-dom';
 export function ScrollToTop() {
   const location = useLocation();
   const navigationType = useNavigationType();
-  const prevKeyRef = useRef<string | null>(null);
   const prevPathnameRef = useRef<string | null>(null);
 
+  // Disable browser's automatic scroll restoration to have full control
   useEffect(() => {
-    const loadPositions = (): Record<string, number> => {
-      try {
-        const raw = sessionStorage.getItem('riplacer_scroll_positions');
-        return raw ? (JSON.parse(raw) as Record<string, number>) : {};
-      } catch {
-        return {};
-      }
-    };
-
-    const savePositions = (positions: Record<string, number>) => {
-      try {
-        sessionStorage.setItem('riplacer_scroll_positions', JSON.stringify(positions));
-      } catch {
-        // ignore storage failures
-      }
-    };
-
-    const positions = loadPositions();
-
-    // Persist scroll position for the page we're leaving.
-    if (prevKeyRef.current) {
-      positions[prevKeyRef.current] = window.scrollY ?? 0;
-      savePositions(positions);
+    if ('scrollRestoration' in history) {
+      history.scrollRestoration = 'manual';
     }
+  }, []);
 
-    prevKeyRef.current = location.key;
+  useEffect(() => {
     const prevPathname = prevPathnameRef.current;
     prevPathnameRef.current = location.pathname;
 
-    const doScroll = () => {
-      // Skip scroll restoration if pathname hasn't changed (same-page link click).
-      // This prevents scroll hijacking when clicking logo/links that preventDefault on same page.
-      if (prevPathname === location.pathname) {
+    // Skip if pathname hasn't changed (same-page navigation like anchor links on same page)
+    if (prevPathname === location.pathname) {
+      return;
+    }
+
+    // For hash navigation, scroll to the element
+    if (location.hash) {
+      const id = decodeURIComponent(location.hash.replace('#', ''));
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ block: 'start' });
         return;
       }
+    }
 
-      // Back/forward should restore prior scroll position.
-      if (navigationType === 'POP') {
-        const y = positions[location.key];
-        window.scrollTo({ top: typeof y === 'number' ? y : 0, left: 0, behavior: 'auto' });
-        return;
-      }
+    // Scroll to top immediately (synchronously)
+    window.scrollTo(0, 0);
 
-      // Hash navigation should scroll to the element.
-      if (location.hash) {
-        const id = decodeURIComponent(location.hash.replace('#', ''));
-        const el = document.getElementById(id);
-        if (el) {
-          el.scrollIntoView({ block: 'start' });
-          return;
-        }
-      }
+    // Also scroll after paint and with delays to fight browser scroll restoration
+    const scrollToTop = () => window.scrollTo(0, 0);
 
-      // Default: new navigation => top.
-      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    requestAnimationFrame(scrollToTop);
+    const t1 = setTimeout(scrollToTop, 0);
+    const t2 = setTimeout(scrollToTop, 50);
+    const t3 = setTimeout(scrollToTop, 100);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
     };
-
-    // Run after React paints, and again on the next tick (covers lazy-loaded route content).
-    requestAnimationFrame(doScroll);
-    setTimeout(doScroll, 0);
-  }, [location.key, location.hash, navigationType]);
+  }, [location.pathname, location.hash, navigationType]);
 
   return null;
 }
