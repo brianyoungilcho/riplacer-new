@@ -3,6 +3,7 @@ import { OnboardingData } from './OnboardingPage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { US_CITIES, US_COUNTIES } from '@/data/us-cities';
 
 interface StepTargetAccountProps {
   data: OnboardingData;
@@ -11,44 +12,36 @@ interface StepTargetAccountProps {
   onBack: () => void;
 }
 
-type CityRecord = { city: string; state: string };
-
-const CITY_SUGGESTIONS: CityRecord[] = [
-  { city: 'Austin', state: 'Texas' },
-  { city: 'Dallas', state: 'Texas' },
-  { city: 'Houston', state: 'Texas' },
-  { city: 'San Antonio', state: 'Texas' },
-  { city: 'Los Angeles', state: 'California' },
-  { city: 'San Diego', state: 'California' },
-  { city: 'San Jose', state: 'California' },
-  { city: 'San Francisco', state: 'California' },
-  { city: 'New York', state: 'New York' },
-  { city: 'Buffalo', state: 'New York' },
-  { city: 'Chicago', state: 'Illinois' },
-  { city: 'Boston', state: 'Massachusetts' },
-  { city: 'Seattle', state: 'Washington' },
-  { city: 'Miami', state: 'Florida' },
-  { city: 'Orlando', state: 'Florida' },
-  { city: 'Denver', state: 'Colorado' },
-  { city: 'Phoenix', state: 'Arizona' },
-  { city: 'Las Vegas', state: 'Nevada' },
-  { city: 'Atlanta', state: 'Georgia' },
-  { city: 'Charlotte', state: 'North Carolina' },
-];
-
 const CATEGORY_PATTERNS: Record<string, string[]> = {
-  police: ['{city} PD', '{city} Police Department'],
-  fire: ['{city} Fire Department', '{city} Fire Rescue'],
-  schools_k12: ['{city} School District', '{city} ISD'],
-  city_gov: ['City of {city}'],
+  police: ['{city} PD', '{city} Police Department', '{county} Sheriff'],
+  fire: ['{city} Fire Department', '{city} Fire Rescue', '{county} Fire District'],
+  schools_k12: ['{city} School District', '{city} ISD', '{county} Schools'],
+  city_gov: ['City of {city}', '{county} County'],
 };
 
 const getActivePatterns = (targetCategories: string[]) => {
   return targetCategories.flatMap((category) => CATEGORY_PATTERNS[category] || []);
 };
 
-const applyPattern = (pattern: string, city: string) => {
-  return pattern.replace('{city}', city);
+const applyPattern = (pattern: string, replacements: { city?: string; county?: string }) => {
+  return pattern
+    .replace('{city}', replacements.city || '')
+    .replace('{county}', replacements.county || '');
+};
+
+const INPUT_ALIASES: Record<string, string> = {
+  la: 'los angeles',
+  sf: 'san francisco',
+  nyc: 'new york',
+  dc: 'washington',
+};
+
+const normalize = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+const normalizeQuery = (value: string) => {
+  const normalized = normalize(value);
+  return INPUT_ALIASES[normalized] || normalized;
 };
 
 export function StepTargetAccount({ data, updateData, onNext, onBack }: StepTargetAccountProps) {
@@ -67,27 +60,55 @@ export function StepTargetAccount({ data, updateData, onNext, onBack }: StepTarg
       return [];
     }
 
-    const cityMatches = CITY_SUGGESTIONS.filter((city) => data.states.includes(city.state));
-    const generated = cityMatches.flatMap((city) =>
-      activePatterns.map((pattern) => applyPattern(pattern, city.city))
+    const normalized = normalizeQuery(input);
+
+    const cityPatterns = activePatterns.filter((pattern) => pattern.includes('{city}'));
+    const countyPatterns = activePatterns.filter((pattern) => pattern.includes('{county}'));
+
+    const cityMatches = US_CITIES.filter((city) => data.states.includes(city.state));
+    const countyMatches = US_COUNTIES.filter((county) => data.states.includes(county.state));
+
+    const cityCandidates = cityMatches.flatMap((city) =>
+      cityPatterns.map((pattern) => ({
+        name: applyPattern(pattern, { city: city.city }),
+        population: city.population,
+      }))
     );
 
-    const normalized = input.trim().toLowerCase();
-    const filtered = generated.filter((candidate) =>
-      candidate.toLowerCase().includes(normalized)
+    const countyCandidates = countyMatches.flatMap((county) =>
+      countyPatterns.map((pattern) => ({
+        name: applyPattern(pattern, { county: county.county }),
+        population: 0,
+      }))
     );
 
-    const unique = Array.from(new Set(filtered));
-    unique.sort((a, b) => {
-      const aStarts = a.toLowerCase().startsWith(normalized);
-      const bStarts = b.toLowerCase().startsWith(normalized);
-      if (aStarts === bStarts) {
-        return a.localeCompare(b);
+    const candidates = [...cityCandidates, ...countyCandidates];
+    const filtered = candidates.filter((candidate) =>
+      normalize(candidate.name).includes(normalized)
+    );
+
+    const uniqueMap = new Map<string, { name: string; population: number }>();
+    for (const candidate of filtered) {
+      const key = normalize(candidate.name);
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, candidate);
       }
-      return aStarts ? -1 : 1;
+    }
+
+    const unique = Array.from(uniqueMap.values());
+    unique.sort((a, b) => {
+      const aStarts = normalize(a.name).startsWith(normalized);
+      const bStarts = normalize(b.name).startsWith(normalized);
+      if (aStarts !== bStarts) {
+        return aStarts ? -1 : 1;
+      }
+      if (a.population !== b.population) {
+        return b.population - a.population;
+      }
+      return a.name.localeCompare(b.name);
     });
 
-    return unique.slice(0, 6);
+    return unique.slice(0, 6).map((candidate) => candidate.name);
   }, [activePatterns, data.states, hasPrereqs, input]);
 
   const canContinue = input.trim().length >= 2;

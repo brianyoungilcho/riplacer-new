@@ -492,7 +492,13 @@ export const US_CITIES: CityRecord[] = RAW_US_CITIES.split('\n')
       population: Number(population),
     };
   })
-  .filter((entry) => entry.city && entry.state && Number.isFinite(entry.population));
+  .filter(
+    (entry) =>
+      entry.city &&
+      entry.state &&
+      Number.isFinite(entry.population) &&
+      entry.population >= 25000
+  );
 
 const RAW_US_COUNTIES = `
 Los Angeles|California
