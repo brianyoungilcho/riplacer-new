@@ -26,6 +26,7 @@ const AcceptableUsePolicy = lazy(() => import("./pages/AcceptableUsePolicy"));
 const Disclaimer = lazy(() => import("./pages/Disclaimer"));
 const RefundPolicy = lazy(() => import("./pages/RefundPolicy"));
 const Pricing = lazy(() => import("./pages/Pricing"));
+const VerificationPending = lazy(() => import("./pages/VerificationPending"));
 
 const queryClient = new QueryClient();
 
@@ -85,6 +86,7 @@ const App = () => {
                     <Route path="/disclaimer" element={<Disclaimer />} />
                     <Route path="/refund" element={<RefundPolicy />} />
                     <Route path="/pricing" element={<Pricing />} />
+                    <Route path="/verification-pending" element={<VerificationPending />} />
                   </>
                 )}
 

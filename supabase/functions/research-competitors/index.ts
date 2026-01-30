@@ -22,6 +22,7 @@ const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const MAX_REQUESTS_ANON = 5; // 5 requests per minute for anonymous
 const MAX_REQUESTS_AUTH = 30; // 30 requests per minute for authenticated
+const MAX_COMPETITORS = 15;
 
 function checkRateLimit(key: string, maxRequests: number): { allowed: boolean; remaining: number } {
   const now = Date.now();
@@ -38,6 +39,153 @@ function checkRateLimit(key: string, maxRequests: number): { allowed: boolean; r
   
   entry.count++;
   return { allowed: true, remaining: maxRequests - entry.count };
+}
+
+type GeminiResult = {
+  competitors: string[];
+  sources: string[];
+  searchQueries: string[];
+  rawContent: string;
+};
+
+function normalizeName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function dedupeCompetitors(names: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const name of names) {
+    const key = normalizeName(name);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(name);
+  }
+  return unique;
+}
+
+function parseCompetitors(content: string): string[] {
+  let competitors: string[] = [];
+  try {
+    const jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      try {
+        competitors = JSON.parse(jsonMatch[0]);
+        console.log('Parsed complete JSON array:', competitors.length, 'competitors');
+      } catch {
+        console.log('JSON array found but incomplete, trying other strategies');
+      }
+    }
+
+    if (competitors.length === 0) {
+      const quotedNames = content.match(/"([A-Z][A-Za-z0-9&.,'\-\s]{2,60})"/g);
+      if (quotedNames && quotedNames.length > 0) {
+        const extracted: string[] = quotedNames
+          .map((q: string) => q.replace(/^"|"$/g, '').trim())
+          .filter((name: string) => {
+            const lower = name.toLowerCase();
+            return name.length >= 3 &&
+              !lower.includes('competitor') &&
+              !lower.includes('example') &&
+              !lower.includes('json') &&
+              !lower.includes('here are') &&
+              !/^\d+$/.test(name);
+          });
+        competitors = Array.from(new Set(extracted)).slice(0, MAX_COMPETITORS);
+        console.log('Extracted from quoted strings:', competitors.length, 'competitors');
+      }
+    }
+
+    if (competitors.length === 0) {
+      const lines = content.split('\n');
+      const extracted: string[] = [];
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        const match = line.match(/^[\-*•\d\.\)\s]+([A-Z][A-Za-z0-9&.,()\s]{2,80}?)(?::|-|–|$)/);
+        if (match) {
+          let name = match[1].trim();
+          name = name.replace(/[.,;:]+$/, '').trim();
+          if (name.length >= 3 && !name.toLowerCase().includes('competitor') && !name.toLowerCase().includes('example')) {
+            extracted.push(name);
+          }
+        }
+      }
+      competitors = Array.from(new Set(extracted)).slice(0, MAX_COMPETITORS);
+      console.log('Extracted from bullet lists:', competitors.length, 'competitors');
+    }
+  } catch (e) {
+    console.error('Failed to parse competitors:', e, 'Content:', content.slice(0, 500));
+    competitors = [];
+  }
+
+  return competitors;
+}
+
+async function callGeminiWithSearch(prompt: string, apiKey: string, label: string): Promise<GeminiResult> {
+  const usedModel = 'gemini-2.5-flash';
+  console.log(`Calling Gemini 2.5 Flash with Google Search grounding (${label})...`);
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }]
+          }
+        ],
+        tools: [
+          {
+            google_search: {}
+          }
+        ],
+        generationConfig: {
+          temperature: 0.5,
+          maxOutputTokens: 2048,
+        }
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`AI API error (${label}):`, response.status, errorText);
+    throw new Error(`AI API error (${label}): ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  console.log(`${usedModel} response received (${label})`);
+
+  const parts = data.candidates?.[0]?.content?.parts ?? [];
+  const content = parts
+    .map((p: any) => (typeof p.text === 'string' ? p.text : ''))
+    .join('\n')
+    .trim() || '[]';
+  console.log(`Gemini raw parts (${label}, truncated):`, JSON.stringify(parts, null, 2).slice(0, 2000));
+  console.log(`AI text content snippet (${label}):`, content.slice(0, 500));
+
+  const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
+  const sources = groundingMetadata?.groundingChunks
+    ?.filter((chunk: any) => chunk.web?.uri)
+    .map((chunk: any) => chunk.web.uri)
+    .slice(0, 10) || [];
+
+  const searchQueries = groundingMetadata?.webSearchQueries || [];
+
+  const competitors = parseCompetitors(content);
+
+  return {
+    competitors,
+    sources,
+    searchQueries,
+    rawContent: content,
+  };
 }
 
 serve(async (req) => {
@@ -142,155 +290,72 @@ serve(async (req) => {
     // Clean company name from domain for exclusion
     const companyName = companyDomain?.replace(/\.(com|io|net|org|co|ai|dev)$/i, '').replace(/^www\./, '') || '';
     
-    const prompt = `Find competitors for a company selling: "${productDescription}"
+    const promptDirect = `Find direct competitors for a company selling: "${productDescription}"
 ${companyDomain ? `Company: ${companyDomain}` : ''}
 
-Search the web and return a JSON array of 5-10 competitor company names. These should be companies selling similar products to similar buyers.
+Search the web and return a JSON array of 8-10 competitor company names that sell the SAME type of product to the SAME buyers.
 
 IMPORTANT:
 - Do NOT include "${companyName}" (that's the user's own company)
 - Return ONLY a valid JSON array like: ["Company A", "Company B", "Company C"]
 - Order by market presence (largest first)`;
 
-    let response;
+    const promptLeaders = `Who are the market leaders in the industry that includes: "${productDescription}"
+${companyDomain ? `Company: ${companyDomain}` : ''}
+
+Search the web and return a JSON array of 8-10 dominant companies in this market, ordered by market share.
+
+IMPORTANT:
+- Do NOT include "${companyName}" (that's the user's own company)
+- Return ONLY a valid JSON array like: ["Company A", "Company B", "Company C"]
+- Order by market presence (largest first)`;
+
+    const promptEmerging = `Find emerging or alternative competitors to companies selling: "${productDescription}"
+${companyDomain ? `Company: ${companyDomain}` : ''}
+
+Search the web and return a JSON array of 5-8 newer or niche competitors that fight for the same budget.
+
+IMPORTANT:
+- Do NOT include "${companyName}" (that's the user's own company)
+- Return ONLY a valid JSON array like: ["Company A", "Company B", "Company C"]`;
+
     const usedModel = 'gemini-2.5-flash';
 
-    console.log('Calling Gemini 2.5 Flash with Google Search grounding...');
-    
-    response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: prompt }]
-            }
-          ],
-          tools: [
-            {
-              google_search: {}
-            }
-          ],
-          generationConfig: {
-            temperature: 0.5,
-            maxOutputTokens: 2048,
-          }
-        }),
-      }
-    );
+    const settled = await Promise.allSettled([
+      callGeminiWithSearch(promptDirect, GOOGLE_GEMINI_API_KEY, 'direct'),
+      callGeminiWithSearch(promptLeaders, GOOGLE_GEMINI_API_KEY, 'leaders'),
+      callGeminiWithSearch(promptEmerging, GOOGLE_GEMINI_API_KEY, 'emerging'),
+    ]);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI API error:', response.status, errorText);
-      throw new Error(`AI API error: ${response.status} - ${errorText}`);
+    const successes = settled.filter((result) => result.status === 'fulfilled') as PromiseFulfilledResult<GeminiResult>[];
+    if (successes.length === 0) {
+      throw new Error('AI API error: all competitor research calls failed');
     }
 
-    const data = await response.json();
-    console.log(`${usedModel} response received`);
-    
-    // Extract content from Google Gemini direct API format
-    const parts = data.candidates?.[0]?.content?.parts ?? [];
-    const content = parts
-      .map((p: any) => (typeof p.text === 'string' ? p.text : ''))
-      .join('\n')
-      .trim() || '[]';
-    console.log('Gemini raw parts (truncated):', JSON.stringify(parts, null, 2).slice(0, 2000));
-    
-    console.log('AI text content snippet:', content.slice(0, 500));
-    
-    // Extract grounding metadata if available
-    const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
-    let sources: string[] = [];
-    
-    if (groundingMetadata?.groundingChunks) {
-      sources = groundingMetadata.groundingChunks
-        .filter((chunk: any) => chunk.web?.uri)
-        .map((chunk: any) => chunk.web.uri)
-        .slice(0, 10);
-      console.log(`Found ${sources.length} grounding sources from Google Search`);
-    }
-    
-    if (groundingMetadata?.webSearchQueries) {
-      console.log('Search queries used:', groundingMetadata.webSearchQueries);
-    }
-    
-    // Parse the competitor names from the response
-    let competitors: string[] = [];
-    try {
-      // Strategy 1: Try to find a complete JSON array
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        try {
-          competitors = JSON.parse(jsonMatch[0]);
-          console.log('Parsed complete JSON array:', competitors.length, 'competitors');
-        } catch {
-          // JSON was incomplete, fall through to other strategies
-          console.log('JSON array found but incomplete, trying other strategies');
-        }
-      }
-      
-      // Strategy 2: Extract quoted strings that look like company names (handles partial JSON)
-      if (competitors.length === 0) {
-        // Match patterns like: "Company Name" in JSON-like context
-        const quotedNames = content.match(/"([A-Z][A-Za-z0-9&.,'\-\s]{2,60})"/g);
-        if (quotedNames && quotedNames.length > 0) {
-          const extracted: string[] = quotedNames
-            .map((q: string) => q.replace(/^"|"$/g, '').trim())
-            .filter((name: string) => {
-              // Filter out common non-company patterns
-              const lower = name.toLowerCase();
-              return name.length >= 3 && 
-                !lower.includes('competitor') && 
-                !lower.includes('example') &&
-                !lower.includes('json') &&
-                !lower.includes('here are') &&
-                !/^\d+$/.test(name); // not just numbers
-            });
-          competitors = Array.from(new Set(extracted)).slice(0, 10);
-          console.log('Extracted from quoted strings:', competitors.length, 'competitors');
-        }
-      }
-      
-      // Strategy 3: Heuristically extract from bullet lists / numbered lists
-      if (competitors.length === 0) {
-        const lines = content.split('\n');
-        const extracted: string[] = [];
-        for (const rawLine of lines) {
-          const line = rawLine.trim();
-          if (!line) continue;
-          // Match patterns like "1. Company", "- Company", "• Company", or "- Company: description"
-          const match = line.match(/^[\-*•\d\.\)\s]+([A-Z][A-Za-z0-9&.,()\s]{2,80}?)(?::|-|–|$)/);
-          if (match) {
-            let name = match[1].trim();
-            name = name.replace(/[.,;:]+$/, '').trim();
-            if (name.length >= 3 && !name.toLowerCase().includes('competitor') && !name.toLowerCase().includes('example')) {
-              extracted.push(name);
-            }
-          }
-        }
-        competitors = Array.from(new Set(extracted)).slice(0, 10);
-        console.log('Extracted from bullet lists:', competitors.length, 'competitors');
-      }
+    const allCompetitors = successes.flatMap((result) => result.value.competitors);
+    let competitors = dedupeCompetitors(allCompetitors);
 
-      // Filter out the user's own company name
-      if (companyName && competitors.length > 0) {
-        const lowerCompanyName = companyName.toLowerCase();
-        competitors = competitors.filter((c: string) => 
-          !c.toLowerCase().includes(lowerCompanyName) &&
-          !lowerCompanyName.includes(c.toLowerCase())
-        );
-      }
-      
-      console.log('Final competitors after filtering:', competitors);
-    } catch (e) {
-      console.error('Failed to parse competitors:', e, 'Content:', content.slice(0, 500));
-      competitors = [];
+    if (companyName && competitors.length > 0) {
+      const lowerCompanyName = companyName.toLowerCase();
+      competitors = competitors.filter((c: string) =>
+        !c.toLowerCase().includes(lowerCompanyName) &&
+        !lowerCompanyName.includes(c.toLowerCase())
+      );
     }
+
+    if (competitors.length > MAX_COMPETITORS) {
+      competitors = competitors.slice(0, MAX_COMPETITORS);
+    }
+
+    const sources = dedupeCompetitors(
+      successes.flatMap((result) => result.value.sources)
+    ).slice(0, 20);
+
+    const searchQueries = dedupeCompetitors(
+      successes.flatMap((result) => result.value.searchQueries)
+    ).slice(0, 20);
+
+    console.log('Final competitors after filtering:', competitors);
 
     // Cache the results with sources
     if (competitors.length > 0) {
@@ -313,7 +378,7 @@ IMPORTANT:
         cached: false,
         model: usedModel,
         webSearchEnabled: usedModel === 'gemini-2.5-flash',
-        searchQueries: groundingMetadata?.webSearchQueries || [],
+        searchQueries,
         error: competitors.length === 0 ? 'no_competitors_found' : null,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

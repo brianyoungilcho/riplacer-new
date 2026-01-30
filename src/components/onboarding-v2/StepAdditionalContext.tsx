@@ -44,7 +44,7 @@ export function StepAdditionalContext({ data, updateData, onNext, onBack }: Step
 
           <button
             onClick={handleSkip}
-            className="block w-full text-left text-sm text-gray-500 hover:text-gray-700 mt-4"
+            className="block w-full text-right text-sm text-gray-500 hover:text-gray-700 mt-4"
           >
             Skip for now
           </button>

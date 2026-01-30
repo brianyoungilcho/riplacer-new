@@ -36,8 +36,8 @@ export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYo
   }, []);
 
   const handleCategoryToggle = (categoryId: string) => {
-    setSelectedCategories(prev => 
-      prev.includes(categoryId) 
+    setSelectedCategories(prev =>
+      prev.includes(categoryId)
         ? prev.filter(c => c !== categoryId)
         : [...prev, categoryId]
     );
@@ -49,12 +49,12 @@ export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYo
       const category = BUYER_CATEGORIES.find(c => c.id === catId);
       return category?.label || catId;
     });
-    
+
     // Append to existing territory filters (don't duplicate)
-    const existingFilters = data.filters.filter(f => 
+    const existingFilters = data.filters.filter(f =>
       !BUYER_CATEGORIES.some(cat => cat.label === f)
     );
-    
+
     updateData({
       targetCategories: selectedCategories,
       filters: [...existingFilters, ...categoryFilters],
@@ -65,7 +65,7 @@ export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYo
   const canContinue = selectedCategories.length > 0;
 
   // Get existing territory filters to display
-  const territoryFilters = data.filters.filter(f => 
+  const territoryFilters = data.filters.filter(f =>
     !BUYER_CATEGORIES.some(cat => cat.label === f)
   );
 
@@ -78,7 +78,7 @@ export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYo
           <h1 className="text-3xl font-semibold text-gray-900 mb-3">
             Who are you selling to?
           </h1>
-          
+
           <p className="text-gray-500 mb-8">
             Tell us who your customers are. Select all that apply.
           </p>
@@ -90,7 +90,7 @@ export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYo
                 key={category.id}
                 onClick={() => handleCategoryToggle(category.id)}
                 className={cn(
-                  "w-full p-4 rounded-xl border text-left transition-all flex items-center justify-between",
+                  "w-full p-4 rounded-xl border text-left transition-all flex items-center justify-between bg-white",
                   selectedCategories.includes(category.id)
                     ? "border-gray-900 bg-gray-50"
                     : "border-gray-200 hover:border-gray-300"

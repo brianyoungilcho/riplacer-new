@@ -142,9 +142,9 @@ export function StepResults({ data, onComplete, onBack, onEditStep, isSaving }: 
             </h3>
             <div className="grid grid-cols-1 gap-3">
               {summaryItems.map((item) => (
-                <SummaryCard 
-                  key={item.label} 
-                  label={item.label} 
+                <SummaryCard
+                  key={item.label}
+                  label={item.label}
                   value={item.value}
                   onClick={() => onEditStep?.(item.step)}
                 />
@@ -160,7 +160,7 @@ export function StepResults({ data, onComplete, onBack, onEditStep, isSaving }: 
               </div>
               <h3 className="text-2xl font-semibold text-gray-900">What happens next</h3>
             </div>
-            
+
             <div className="space-y-5">
               <div className="flex items-start gap-4">
                 <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
@@ -230,6 +230,7 @@ export function StepResults({ data, onComplete, onBack, onEditStep, isSaving }: 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onBlur={() => setTouched(true)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                 className="pl-11 h-14 sm:h-12 text-base border-gray-200 focus:border-primary focus:ring-primary"
               />
             </div>

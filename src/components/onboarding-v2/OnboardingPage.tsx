@@ -244,12 +244,21 @@ export function OnboardingPage() {
       updateData({ email });
       localStorage.setItem('riplacer_onboarding_submission', JSON.stringify(submission));
 
-      const { error } = await supabase.functions.invoke('submit-onboarding', { body: submission });
-      if (error) {
-        console.error('Submit onboarding error:', error);
+      const { error: submitError } = await supabase.functions.invoke('submit-onboarding', { body: submission });
+      if (submitError) {
+        console.error('Submit onboarding error:', submitError);
       }
 
-      navigate('/thank-you', { state: { email, targetAccount: data.targetAccount } });
+      const { error: authError } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: window.location.origin + '/thank-you',
+        },
+      });
+
+      if (authError) throw authError;
+
+      navigate('/verification-pending', { state: { email, targetAccount: data.targetAccount } });
     } catch (error) {
       console.error('Failed to submit onboarding:', error);
       toast.error('Something went wrong. Please try again.');
