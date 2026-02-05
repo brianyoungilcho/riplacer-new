@@ -36,15 +36,15 @@ export function PricingCard({
 }: PricingCardProps) {
     return (
         <Card className={cn(
-            "flex flex-col relative overflow-hidden transition-all duration-200 hover:shadow-lg",
-            highlighted ? "border-primary shadow-md scale-105 z-10" : "border-border"
+            "flex flex-col relative transition-all duration-200 hover:shadow-lg h-full",
+            highlighted ? "border-primary shadow-md z-10" : "border-border"
         )}>
             {popular && (
-                <div className="absolute top-0 right-0">
-                    <Badge className="rounded-tl-none rounded-br-none rounded-tr-md rounded-bl-md bg-primary text-primary-foreground">
-                        Most Popular
-                    </Badge>
-                </div>
+                <Badge
+                    className="absolute -top-[1px] -right-[1px] rounded-tl-none rounded-br-none rounded-tr-[7px] rounded-bl-md bg-primary text-primary-foreground border-none px-3 py-1"
+                >
+                    Most Popular
+                </Badge>
             )}
 
             <CardHeader className="pb-8 pt-6">
