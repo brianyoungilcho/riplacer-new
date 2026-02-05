@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { isAppSubdomain, redirectToMain } from '@/lib/domain';
@@ -16,6 +16,19 @@ import { supabase } from '@/integrations/supabase/client';
 function hasSessionTokensInUrl(): boolean {
   const hash = window.location.hash;
   return hash.includes('type=session_transfer') && hash.includes('access_token=');
+}
+
+// Check if we came from a sign out on the app subdomain
+function hasSignedOutFlag(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('signed_out') === '1';
+}
+
+// Clean up sign out flag from URL
+function clearSignedOutFlag(): void {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('signed_out');
+  window.history.replaceState(null, '', url.pathname + url.search);
 }
 
 // Parse and consume session tokens from URL
@@ -50,12 +63,46 @@ export function SubdomainRedirect() {
   const hasRedirected = useRef(false);
   const hasStarted = useRef(false);
 
+  // Track if we're clearing the cross-domain session
+  const [clearingSession, setClearingSession] = useState(() => {
+    // Check synchronously on mount if we need to clear session
+    return !isAppSubdomain() && hasSignedOutFlag();
+  });
+
+  // Step 0: Handle cross-domain sign out (clear session on main domain after signing out from app subdomain)
+  useEffect(() => {
+    if (!isAppSubdomain() && hasSignedOutFlag()) {
+      console.log('[SubdomainRedirect] Cross-domain sign out detected, clearing main domain session');
+      clearSignedOutFlag();
+      sessionStorage.removeItem('riplacer_signing_out');
+      
+      // Clear Supabase auth storage directly (more reliable than signOut() which races with auth listener)
+      // Supabase stores session in localStorage with key pattern: sb-<project-ref>-auth-token
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('sb-') && key.includes('-auth-token')) {
+          localStorage.removeItem(key);
+        }
+      }
+      
+      console.log('[SubdomainRedirect] Cleared auth storage, reloading');
+      window.location.reload();
+    }
+  }, []);
+
   // Step 1: Process session tokens on mount
   useEffect(() => {
     if (hasStarted.current) return;
     hasStarted.current = true;
 
     const processTokens = async () => {
+      const hasTokensInUrl = hasSessionTokensInUrl();
+      
+      // If tokens are present, user is SIGNING IN - clear any stale signing out flag
+      if (hasTokensInUrl) {
+        sessionStorage.removeItem('riplacer_signing_out');
+      }
+      
       const tokens = consumeSessionTokens();
 
       if (tokens) {
@@ -114,6 +161,14 @@ export function SubdomainRedirect() {
 
   // Step 3: Apply redirect logic ONLY when ready
   useEffect(() => {
+    const isOnAppSubdomain = isAppSubdomain();
+    const signingOut = sessionStorage.getItem('riplacer_signing_out');
+    
+    // Block 0: Don't proceed while clearing cross-domain session
+    if (clearingSession) {
+      return;
+    }
+
     // Block 1: Don't proceed until tokens are processed
     if (!tokensProcessed) {
       return;
@@ -130,13 +185,13 @@ export function SubdomainRedirect() {
     }
 
     // Block 4: Only apply on app subdomain
-    if (!isAppSubdomain()) {
+    if (!isOnAppSubdomain) {
       sessionStorage.removeItem('riplacer_signing_out');
       return;
     }
 
-    // Block 5: Don't redirect during sign out
-    if (sessionStorage.getItem('riplacer_signing_out') === 'true') {
+    // Block 5: Don't redirect during sign out - let handleSignOut complete its redirect
+    if (signingOut === 'true') {
       return;
     }
 
@@ -152,7 +207,7 @@ export function SubdomainRedirect() {
       hasRedirected.current = true;
       redirectToMain('/auth');
     }
-  }, [tokensProcessed, authLoading, user, location.pathname]);
+  }, [tokensProcessed, authLoading, user, location.pathname, clearingSession]);
 
   return null;
 }

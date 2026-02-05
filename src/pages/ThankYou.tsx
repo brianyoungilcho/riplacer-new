@@ -2,7 +2,7 @@ import { Check, ArrowRight } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { redirectToApp } from '@/lib/domain';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -15,15 +15,18 @@ export default function ThankYou() {
   const location = useLocation();
   const { user, loading } = useAuth();
   const state = (location.state as ThankYouState) || {};
-  const email = state.email || 'your inbox';
-  const targetAccount = state.targetAccount || 'your target';
+  const submissionRaw = localStorage.getItem('riplacer_onboarding_submission');
+  const submission = submissionRaw ? JSON.parse(submissionRaw) : null;
+  const email = state.email || submission?.email || 'your inbox';
+  const targetAccount = state.targetAccount || submission?.targetAccount || 'your target';
+  const [isStartingResearch, setIsStartingResearch] = useState(false);
 
   // Clear onboarding progress from localStorage
   useEffect(() => {
     localStorage.removeItem('riplacer_onboarding_progress');
   }, []);
 
-  const handleGoToDashboard = async () => {
+  const handleGoToDashboard = useCallback(async () => {
     // Redirect to app subdomain with session transfer
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
@@ -35,7 +38,66 @@ export default function ThankYou() {
       // Fallback: redirect without session (will need to auth on app subdomain)
       redirectToApp('/');
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!user || isStartingResearch) return;
+
+    const startResearch = async () => {
+      setIsStartingResearch(true);
+
+      try {
+        const submissionRaw = localStorage.getItem('riplacer_onboarding_submission');
+        if (!submissionRaw) {
+          await handleGoToDashboard();
+          return;
+        }
+
+        const existingRequestId = localStorage.getItem('riplacer_research_request_id');
+        if (existingRequestId) {
+          await handleGoToDashboard();
+          return;
+        }
+
+        const submission = JSON.parse(submissionRaw);
+        const { data: request, error: insertError } = await supabase
+          .from('research_requests')
+          .insert({
+            user_id: user.id,
+            product_description: submission.productDescription,
+            company_name: submission.companyName || null,
+            company_domain: submission.companyDomain || null,
+            territory_states: submission.states || [],
+            target_categories: submission.targetCategories || [],
+            competitors: submission.competitors || [],
+            target_account: submission.targetAccount,
+            additional_context: submission.additionalContext || null,
+            status: 'pending',
+          })
+          .select('id')
+          .single();
+
+        if (insertError) {
+          console.error('Failed to create research request:', insertError);
+          await handleGoToDashboard();
+          return;
+        }
+
+        localStorage.setItem('riplacer_research_request_id', request.id);
+
+        await supabase.functions.invoke('research-target-account', {
+          body: { requestId: request.id },
+        });
+
+        await handleGoToDashboard();
+      } catch (error) {
+        console.error('Failed to start research:', error);
+        await handleGoToDashboard();
+      }
+    };
+
+    startResearch();
+  }, [user, isStartingResearch, handleGoToDashboard]);
 
   if (loading) {
     return (
@@ -56,8 +118,8 @@ export default function ThankYou() {
           You're all set!
         </h1>
         <p className="text-gray-600 mb-8">
-          Check <span className="font-medium text-gray-900">{email}</span> in the next 15-30 minutes
-          for your first briefing on <span className="font-medium text-gray-900">{targetAccount}</span>.
+          We're compiling your briefing on <span className="font-medium text-gray-900">{targetAccount}</span>.
+          You can view the report in your dashboard once it's ready.
         </p>
 
         <div className="bg-gray-50 rounded-xl p-6 text-left mb-8">
@@ -65,7 +127,7 @@ export default function ThankYou() {
           <ul className="space-y-2 text-sm text-gray-600">
             <li>Check your spam folder just in case.</li>
             <li>Add hello@riplacer.com to your contacts.</li>
-            <li>Your briefing will include actionable intel on {targetAccount}.</li>
+            <li>Your report will include actionable intel on {targetAccount}.</li>
             {user && <li>Explore your dashboard to track progress and insights.</li>}
           </ul>
         </div>
@@ -76,8 +138,9 @@ export default function ThankYou() {
             variant="glow"
             size="lg"
             className="w-full mb-4 h-14 text-base font-semibold"
+            disabled={isStartingResearch}
           >
-            Go to Dashboard
+            {isStartingResearch ? 'Preparing your report...' : 'Go to Dashboard'}
             <ArrowRight className="w-5 h-5 ml-2" />
           </Button>
         )}

@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { OnboardingData } from './OnboardingPage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
-import { Check, Plus, X, Loader2 } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 
 interface StepCompetitorsProps {
   data: OnboardingData;
@@ -21,13 +20,6 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
     setSelectedCompetitors(data.competitors);
   }, []);
 
-  // Check if AI research is still loading
-  const isResearchLoading = data.competitorResearchLoading;
-  const researchFailed = data.competitorResearchFailed;
-  
-  // Get AI-suggested competitors
-  const suggestedCompetitors = data.suggestedCompetitors || [];
-  const hasAISuggestions = suggestedCompetitors.length > 0;
 
   const handleCompetitorToggle = (competitor: string) => {
     setSelectedCompetitors(prev => 
@@ -78,7 +70,7 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
           </h1>
           
           <p className="text-gray-500 mb-6">
-            Select competitors you want to displace. We'll find accounts using their products.
+            Select competitors you want to displace so we can focus the research.
           </p>
 
           {/* Selected Competitors */}
@@ -130,67 +122,10 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
             </div>
           </div>
 
-          {/* Suggested Competitors */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <label className="text-sm font-medium text-gray-700">
-                Suggested competitors
-              </label>
-              {isResearchLoading ? (
-                <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Researching your market...
-                </span>
-              ) : hasAISuggestions ? (
-                <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
-                  <Check className="w-3 h-3" />
-                  AI-powered
-                </span>
-              ) : null}
-            </div>
-            
-            {isResearchLoading ? (
-              /* Loading skeleton while AI researches */
-              <div className="space-y-2">
-                {[1, 2, 3, 4, 5].map(i => (
-                  <div key={i} className="w-full p-3 rounded-xl border border-gray-200 bg-gray-50 animate-pulse">
-                    <div className="h-5 bg-gray-200 rounded" style={{ width: `${60 + Math.random() * 30}%` }}></div>
-                  </div>
-                ))}
-                <p className="text-xs text-gray-500 mt-3 text-center">
-                  Or add your own competitors above while we research
-                </p>
-              </div>
-            ) : hasAISuggestions ? (
-              <div className="space-y-2">
-                {suggestedCompetitors.map(competitor => (
-                  <button
-                    key={competitor}
-                    onClick={() => handleCompetitorToggle(competitor)}
-                    className={cn(
-                      "w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between",
-                      selectedCompetitors.includes(competitor)
-                        ? "border-gray-900 bg-gray-50"
-                        : "border-gray-200 hover:border-gray-300"
-                    )}
-                  >
-                    <span className="font-medium text-gray-900">{competitor}</span>
-                    {selectedCompetitors.includes(competitor) && (
-                      <div className="w-5 h-5 rounded-full bg-gray-900 flex items-center justify-center">
-                        <Check className="w-3 h-3" />
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              /* No AI suggestions and not loading - show prompt to add manually */
-              <div className="p-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 text-center">
-                <p className="text-sm text-gray-600">
-                  Add your competitors using the input above
-                </p>
-              </div>
-            )}
+          <div className="p-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 text-center">
+            <p className="text-sm text-gray-600">
+              Add any additional competitors using the input above.
+            </p>
           </div>
         </div>
       </div>

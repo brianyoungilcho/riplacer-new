@@ -33,9 +33,6 @@ export interface OnboardingData {
 
   // Step 4
   competitors: string[];
-  suggestedCompetitors?: string[]; // AI-suggested competitors (from early research)
-  competitorResearchLoading?: boolean; // true while fetching suggestions
-  competitorResearchFailed?: boolean; // true if AI call succeeded but returned no competitors
 
   // Step 5
   targetAccount?: string;
@@ -68,9 +65,8 @@ export function OnboardingPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
-  // Track previous step and product description to detect when user goes back to modify product
+  // Track previous step to detect when user goes back to modify product
   const prevStepRef = useRef<number>(1);
-  const prevProductDescriptionRef = useRef<string>('');
 
   // Load saved progress from localStorage on mount
   useEffect(() => {
@@ -84,7 +80,6 @@ export function OnboardingPage() {
         setStep(loadedStep);
         // Initialize refs with loaded data
         prevStepRef.current = loadedStep;
-        prevProductDescriptionRef.current = loadedData.productDescription || '';
       } catch (e) {
         console.error('Failed to parse saved onboarding progress:', e);
       }
@@ -120,108 +115,16 @@ export function OnboardingPage() {
   }, []);
 
   // Detect when user navigates back to step 1 from a later step
-  // Clear competitor suggestions so they can be re-fetched if product changes
   useEffect(() => {
     const prevStep = prevStepRef.current;
 
     // If user navigated back to step 1 from step 2+
     if (step === 1 && prevStep > 1) {
-      console.log('🔄 [Frontend] User navigated back to step 1 from step', prevStep, '- clearing competitor suggestions');
-      updateData({
-        suggestedCompetitors: undefined,
-        competitorResearchLoading: false,
-        competitorResearchFailed: false,
-      });
+      console.log('🔄 [Frontend] User navigated back to step 1 from step', prevStep);
     }
 
     prevStepRef.current = step;
   }, [step, updateData]);
-
-  // Trigger early competitor research when Step 1 is completed
-  // This runs in the background so suggestions are ready by Step 4
-  // Also re-runs if product description changed after user went back to edit
-  useEffect(() => {
-    const triggerCompetitorResearch = async () => {
-      // Trigger if:
-      // 1. We just completed step 1 (now on step 2+)
-      // 2. We have a product description
-      // 3. Either:
-      //    a. We haven't already loaded suggestions, OR
-      //    b. The product description changed (user went back and modified it)
-      // 4. We're not already loading
-      const productDescriptionChanged =
-        prevProductDescriptionRef.current &&
-        prevProductDescriptionRef.current !== data.productDescription;
-
-      const shouldTrigger =
-        step >= 2 &&
-        data.productDescription &&
-        !data.competitorResearchLoading &&
-        (!data.suggestedCompetitors || productDescriptionChanged);
-
-      if (shouldTrigger) {
-        // If product description changed, clear old suggestions first
-        if (productDescriptionChanged) {
-          console.log('🔄 [Frontend] Product description changed - clearing old competitor suggestions');
-          updateData({
-            suggestedCompetitors: undefined,
-            competitorResearchLoading: true,
-            competitorResearchFailed: false,
-          });
-        } else {
-          updateData({ competitorResearchLoading: true });
-        }
-
-        try {
-          console.log('🔍 [Frontend] Triggering competitor research for:', {
-            productDescription: data.productDescription,
-            companyDomain: data.companyDomain,
-            productDescriptionChanged,
-          });
-
-          const { data: response, error } = await supabase.functions.invoke('research-competitors', {
-            body: {
-              productDescription: data.productDescription,
-              companyDomain: data.companyDomain,
-            }
-          });
-
-          if (error) {
-            console.error('Competitor research API error:', error);
-            updateData({ competitorResearchLoading: false });
-            return;
-          }
-
-          console.log('✅ [Frontend] Competitor research response:', response);
-
-          if (response?.competitors && Array.isArray(response.competitors) && response.competitors.length > 0) {
-            updateData({
-              suggestedCompetitors: response.competitors,
-              competitorResearchLoading: false,
-              competitorResearchFailed: false,
-            });
-          } else {
-            // Mark as finished (and possibly failed) so UI can communicate clearly
-            updateData({
-              competitorResearchLoading: false,
-              competitorResearchFailed: !!response?.error,
-            });
-          }
-
-        } catch (error) {
-          console.error('Failed to fetch competitor suggestions:', error);
-          updateData({ competitorResearchLoading: false });
-        }
-      }
-
-      // Update the ref to track product description for next comparison
-      if (data.productDescription) {
-        prevProductDescriptionRef.current = data.productDescription;
-      }
-    };
-
-    triggerCompetitorResearch();
-  }, [step, data.productDescription, data.companyDomain, data.suggestedCompetitors, data.competitorResearchLoading, updateData]);
 
   const nextStep = useCallback(() => {
     setStep(prev => Math.min(prev + 1, 7));
@@ -243,11 +146,6 @@ export function OnboardingPage() {
 
       updateData({ email });
       localStorage.setItem('riplacer_onboarding_submission', JSON.stringify(submission));
-
-      const { error: submitError } = await supabase.functions.invoke('submit-onboarding', { body: submission });
-      if (submitError) {
-        console.error('Submit onboarding error:', submitError);
-      }
 
       const { error: authError } = await supabase.auth.signInWithOtp({
         email,

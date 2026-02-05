@@ -17,7 +17,7 @@ import Index from "./pages/Index";
 const Auth = lazy(() => import("./pages/Auth"));
 const OnboardingV2 = lazy(() => import("./pages/OnboardingV2"));
 const ThankYou = lazy(() => import("./pages/ThankYou"));
-const Dashboard = lazy(() => import("./pages/app/Dashboard"));
+const ReportDashboard = lazy(() => import("./pages/app/ReportDashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
@@ -69,7 +69,7 @@ const App = () => {
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 {/* Root route: Dashboard on app subdomain, Landing page on main domain */}
-                <Route path="/" element={onAppSubdomain ? <Dashboard /> : <Index />} />
+                <Route path="/" element={onAppSubdomain ? <ReportDashboard /> : <Index />} />
 
                 {/* Auth - works on both domains */}
                 <Route path="/auth" element={<Auth />} />
@@ -91,7 +91,7 @@ const App = () => {
                 )}
 
                 {/* Legacy /app route - works on both domains for backwards compatibility */}
-                <Route path="/app" element={<Dashboard />} />
+                <Route path="/app" element={<ReportDashboard />} />
 
                 {/* 404 */}
                 <Route path="*" element={<NotFound />} />
