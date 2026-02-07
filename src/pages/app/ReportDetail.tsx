@@ -344,6 +344,14 @@ export default function ReportDetail() {
   }
 
   const report = Array.isArray(data.research_reports) ? data.research_reports[0] : undefined;
+  console.log("📊 [ReportDetail] Report variable assignment:", {
+    dataResearchReports: data.research_reports,
+    isArray: Array.isArray(data.research_reports),
+    arrayLength: Array.isArray(data.research_reports) ? data.research_reports.length : "N/A",
+    firstItem: Array.isArray(data.research_reports) ? data.research_reports[0] : "N/A",
+    reportResult: report,
+    reportHasContent: !!report?.content
+  });
   const title = report?.content?.title || data.target_account;
   const sources = report?.sources || [];
 
@@ -479,6 +487,13 @@ export default function ReportDetail() {
       {console.log("🔍 [ReportDetail] Report render condition:", {
         status: data.status,
         statusIsCompleted: data.status === "completed",
+        dataResearchReports: data.research_reports,
+        dataResearchReportsType: typeof data.research_reports,
+        dataResearchReportsIsArray: Array.isArray(data.research_reports),
+        dataResearchReportsLength: Array.isArray(data.research_reports) ? data.research_reports.length : "NOT ARRAY",
+        reportVariable: report,
+        reportIsUndefined: report === undefined,
+        reportIsNull: report === null,
         hasReport: !!report,
         reportTruthy: Boolean(report),
         reportContentExists: !!report?.content,
