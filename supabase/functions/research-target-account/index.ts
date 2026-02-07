@@ -617,11 +617,7 @@ serve(async (req) => {
 
     // Synthesize the playbook
     const playbook = await synthesizePlaybook(agentResults, request);
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${PERPLEXITY_API_KEY}`,
-        "Content-Type": "application/json",
-      },
+
     // Collect all sources from agent memory
     const { data: agentMemories } = await supabase
       .from("agent_memory")

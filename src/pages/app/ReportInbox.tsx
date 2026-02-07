@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import { ChevronRight, ChevronDown, Check } from "lucide-react";
+import { ChevronRight, ChevronDown, Check, RefreshCw } from "lucide-react";
 
 type ResearchRequestWithReport = {
   id: string;
@@ -37,6 +37,7 @@ export default function ReportInbox() {
   const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
   const [deletingAccount, setDeletingAccount] = useState<string | null>(null);
   const [accountIntelligence, setAccountIntelligence] = useState<Map<string, any>>(new Map());
+  const [isRegeneratingAll, setIsRegeneratingAll] = useState(false);
 
   const loadRequests = useCallback(async () => {
     // 1. Log user authentication status
@@ -526,6 +527,94 @@ export default function ReportInbox() {
     }
   };
 
+  const handleRegenerateAllReports = async () => {
+    if (isRegeneratingAll) return;
+
+    setIsRegeneratingAll(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      // Get all requests that have reports (completed ones)
+      const allRequests = Array.from(accountGroups.values()).flat();
+      const requestsWithReports = allRequests.filter(req =>
+        req.status === 'completed' || Array.isArray(req.research_reports) && req.research_reports.length > 0
+      );
+
+      if (requestsWithReports.length === 0) {
+        toast.info("No completed reports found to regenerate");
+        setIsRegeneratingAll(false);
+        return;
+      }
+
+      console.log(`🚀 Regenerating ${requestsWithReports.length} reports with multi-agent pipeline`);
+
+      for (const request of requestsWithReports) {
+        try {
+          // Reset to pending
+          const { error: updateError } = await supabase
+            .from('research_requests')
+            .update({
+              status: 'pending',
+              research_started_at: null,
+              research_completed_at: null
+            })
+            .eq('id', request.id);
+
+          if (updateError) {
+            console.error(`❌ Failed to reset ${request.target_account}:`, updateError);
+            errorCount++;
+            continue;
+          }
+
+          // Start new research with multi-agent pipeline
+          const { error: invokeError } = await supabase.functions.invoke('research-target-account', {
+            body: { requestId: request.id },
+          });
+
+          if (invokeError) {
+            console.error(`❌ Failed to start research for ${request.target_account}:`, invokeError);
+            errorCount++;
+          } else {
+            console.log(`✅ Started multi-agent research for ${request.target_account}`);
+            successCount++;
+
+            // Update local state to show pending
+            setAccountGroups(prev => {
+              const newGroups = new Map(prev);
+              for (const [account, requests] of newGroups) {
+                const requestIndex = requests.findIndex(req => req.id === request.id);
+                if (requestIndex !== -1) {
+                  requests[requestIndex] = { ...requests[requestIndex], status: 'pending' };
+                  break;
+                }
+              }
+              return newGroups;
+            });
+          }
+        } catch (error) {
+          console.error(`❌ Error processing ${request.target_account}:`, error);
+          errorCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Regenerated ${successCount} reports with enhanced multi-agent research!`);
+        if (errorCount > 0) {
+          toast.warning(`${errorCount} reports failed to regenerate`);
+        }
+      } else {
+        toast.error("Failed to regenerate any reports");
+      }
+
+    } catch (error) {
+      console.error("❌ Unexpected error in regenerate all:", error);
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsRegeneratingAll(false);
+    }
+  };
+
   const handleDeleteRequest = async (requestId: string) => {
     try {
       const { error } = await supabase
@@ -637,6 +726,21 @@ export default function ReportInbox() {
 
   return (
     <div className="space-y-0">
+      {/* Regenerate All Reports Button */}
+      <div className="mb-6">
+        <button
+          onClick={handleRegenerateAllReports}
+          disabled={isRegeneratingAll}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <RefreshCw className={`w-4 h-4 ${isRegeneratingAll ? 'animate-spin' : ''}`} />
+          {isRegeneratingAll ? 'Regenerating All Reports...' : 'Regenerate All Reports'}
+        </button>
+        <p className="text-sm text-gray-600 mt-2">
+          This will restart research for all your reports using the new multi-agent pipeline with enhanced insights.
+        </p>
+      </div>
+
       {Array.from(accountGroups.entries()).map(([accountName, requests], accountIndex) => {
         const latestRequest = requests[0]; // Already sorted by created_at desc
         const reportCount = requests.length;
