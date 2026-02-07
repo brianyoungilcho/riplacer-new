@@ -127,8 +127,17 @@ export default function ReportDetail() {
         hint: error.hint
       } : null,
       hasData: !!requestData,
-      rawData: requestData
+      dataKeys: requestData ? Object.keys(requestData) : null,
+      researchReports: requestData?.research_reports,
+      researchReportsType: typeof requestData?.research_reports,
+      researchReportsIsArray: Array.isArray(requestData?.research_reports),
+      researchReportsLength: Array.isArray(requestData?.research_reports) ? requestData.research_reports.length : "NOT ARRAY"
     });
+
+    // Log the complete requestData structure for debugging
+    if (requestData) {
+      console.log("📋 [ReportDetail] Complete requestData:", JSON.stringify(requestData, null, 2));
+    }
 
     if (error) {
       console.error("❌ [ReportDetail] Failed to load request:", error);
@@ -349,10 +358,18 @@ export default function ReportDetail() {
     reportId: report?.id,
     reportContent: report?.content ? "HAS CONTENT" : "NO CONTENT",
     reportContentKeys: report?.content ? Object.keys(report.content) : null,
-    isHartford: data?.target_account?.toLowerCase().includes("hartford"),
+    reportSummary: report?.summary,
+    isNewYork: data?.target_account?.toLowerCase().includes("new york"),
     researchReportsArray: Array.isArray(data?.research_reports),
     researchReportsLength: Array.isArray(data?.research_reports) ? data.research_reports.length : "NOT ARRAY"
   });
+
+  // Log the actual report content structure
+  if (report?.content) {
+    console.log("📄 [ReportDetail] Report content structure:", JSON.stringify(report.content, null, 2));
+  } else if (report) {
+    console.log("📄 [ReportDetail] Report structure (no content):", JSON.stringify(report, null, 2));
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-0">
@@ -464,6 +481,10 @@ export default function ReportDetail() {
         statusIsCompleted: data.status === "completed",
         hasReport: !!report,
         reportTruthy: Boolean(report),
+        reportContentExists: !!report?.content,
+        reportHasTopInsight: !!report?.content?.topInsight,
+        reportHasAccountSnapshot: !!report?.content?.accountSnapshot,
+        reportHasSections: Array.isArray(report?.content?.sections) && report.content.sections.length > 0,
         willRender: data.status === "completed" && report
       })}
 
@@ -533,6 +554,25 @@ export default function ReportDetail() {
               <pre className="mt-4 p-4 bg-yellow-100 rounded text-sm overflow-auto max-h-60">
                 {JSON.stringify(report.content, null, 2)}
               </pre>
+            </div>
+          )}
+
+          {/* Debug: Show raw report data if no content rendered */}
+          {data.status === "completed" && report && !report.content?.topInsight && !report.content?.accountSnapshot && !Array.isArray(report.content?.sections) && (
+            <div className="bg-red-50 border border-red-200 p-6 mb-8 rounded-lg">
+              <h3 className="text-lg font-semibold text-red-800 mb-2">Debug: No Content Rendered</h3>
+              <p className="text-red-700 mb-4">
+                The report exists but no content sections are rendering. Here's the raw report data:
+              </p>
+              <details className="mb-4">
+                <summary className="cursor-pointer text-red-700 font-medium">Click to show full report data</summary>
+                <pre className="mt-2 p-4 bg-red-100 rounded text-sm overflow-auto max-h-96">
+                  {JSON.stringify(report, null, 2)}
+                </pre>
+              </details>
+              <p className="text-sm text-red-600">
+                Check the browser console for detailed logs about why content isn't rendering.
+              </p>
             </div>
           )}
 
