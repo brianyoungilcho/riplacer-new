@@ -2,24 +2,39 @@ import { Check, ArrowRight } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { useCallback, useEffect, useState } from 'react';
-import { redirectToApp } from '@/lib/domain';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface ThankYouState {
   email?: string;
   targetAccount?: string;
 }
 
+type PendingOnboarding = {
+  email: string;
+  data: {
+    productDescription: string;
+    companyName?: string;
+    companyDomain?: string;
+    states?: string[];
+    targetCategories?: string[];
+    competitors?: string[];
+    targetAccount?: string;
+    additionalContext?: string;
+  };
+};
+
 export default function ThankYou() {
   const location = useLocation();
   const { user, loading } = useAuth();
   const state = (location.state as ThankYouState) || {};
-  const submissionRaw = localStorage.getItem('riplacer_onboarding_submission');
-  const submission = submissionRaw ? JSON.parse(submissionRaw) : null;
-  const email = state.email || submission?.email || 'your inbox';
-  const targetAccount = state.targetAccount || submission?.targetAccount || 'your target';
+  const [pendingOnboarding, setPendingOnboarding] = useState<PendingOnboarding | null>(null);
+  const email = state.email || pendingOnboarding?.email || 'your inbox';
+  const targetAccount = state.targetAccount || pendingOnboarding?.data?.targetAccount || 'your target';
   const [isStartingResearch, setIsStartingResearch] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const hasAttemptedStart = useRef(false);
 
   // Clear onboarding progress from localStorage
   useEffect(() => {
@@ -27,39 +42,54 @@ export default function ThankYou() {
   }, []);
 
   const handleGoToDashboard = useCallback(async () => {
-    // Redirect to app subdomain with session transfer
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      redirectToApp('/', {
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-      });
-    } else {
-      // Fallback: redirect without session (will need to auth on app subdomain)
-      redirectToApp('/');
-    }
+    window.location.href = '/app';
   }, []);
 
   useEffect(() => {
-    if (!user || isStartingResearch) return;
+    if (!user || isStartingResearch || hasAttemptedStart.current) return;
 
     const startResearch = async () => {
+      hasAttemptedStart.current = true;
       setIsStartingResearch(true);
+      setStartError(null);
 
       try {
-        const submissionRaw = localStorage.getItem('riplacer_onboarding_submission');
-        if (!submissionRaw) {
-          await handleGoToDashboard();
+        if (!user?.email) {
+          setStartError('We could not verify your session. Please sign in again.');
+          setIsStartingResearch(false);
           return;
         }
 
-        const existingRequestId = localStorage.getItem('riplacer_research_request_id');
-        if (existingRequestId) {
-          await handleGoToDashboard();
+        const { data: pendingData, error: pendingError } = await supabase
+          .from('pending_onboarding')
+          .select('email, data')
+          .eq('email', user.email)
+          .limit(1);
+
+        const pending = pendingData?.[0] || null;
+
+        if (pendingError || !pending) {
+          // Check for existing request to handle page reloads gracefully
+          const { data: existingRequest } = await supabase
+            .from('research_requests')
+            .select('id')
+            .eq('user_id', user.id)
+            .limit(1);
+
+          if (existingRequest && existingRequest.length > 0) {
+            await handleGoToDashboard();
+            return;
+          }
+
+          console.error('Failed to load pending onboarding:', pendingError);
+          setStartError('We could not find your onboarding data. Please complete onboarding again.');
+          setIsStartingResearch(false);
           return;
         }
 
-        const submission = JSON.parse(submissionRaw);
+        setPendingOnboarding(pending);
+
+        const submission = pending.data;
         const { data: request, error: insertError } = await supabase
           .from('research_requests')
           .insert({
@@ -79,20 +109,39 @@ export default function ThankYou() {
 
         if (insertError) {
           console.error('Failed to create research request:', insertError);
-          await handleGoToDashboard();
+          setStartError('We could not start your research. Please try again or contact support.');
+          toast.error('We could not start your research. Please try again.');
+          setIsStartingResearch(false);
           return;
         }
 
-        localStorage.setItem('riplacer_research_request_id', request.id);
-
-        await supabase.functions.invoke('research-target-account', {
+        const { error: invokeError } = await supabase.functions.invoke('research-target-account', {
           body: { requestId: request.id },
         });
+
+        if (invokeError) {
+          console.error('Failed to invoke research function:', invokeError);
+          setStartError('We could not queue your research yet. Please try again in a moment.');
+          toast.error('We could not queue your research yet. Please try again.');
+          setIsStartingResearch(false);
+          return;
+        }
+
+        const { error: deleteError } = await supabase
+          .from('pending_onboarding')
+          .delete()
+          .eq('email', user.email);
+
+        if (deleteError) {
+          console.error('Failed to delete pending onboarding:', deleteError);
+        }
 
         await handleGoToDashboard();
       } catch (error) {
         console.error('Failed to start research:', error);
-        await handleGoToDashboard();
+        setStartError('We could not start your research. Please try again.');
+        toast.error('We could not start your research. Please try again.');
+        setIsStartingResearch(false);
       }
     };
 
@@ -131,6 +180,15 @@ export default function ThankYou() {
             {user && <li>Explore your dashboard to track progress and insights.</li>}
           </ul>
         </div>
+
+        {startError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700 mb-6 space-y-3">
+            <p>{startError}</p>
+            <Link to="/start" className="text-sm text-red-700 underline hover:text-red-800">
+              Restart onboarding
+            </Link>
+          </div>
+        )}
 
         {user && (
           <Button

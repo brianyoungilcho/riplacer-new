@@ -5,16 +5,14 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
-import { SubdomainRedirect } from "@/components/SubdomainRedirect";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { Loader2 } from "lucide-react";
-import { isAppSubdomain } from "@/lib/domain";
 
 // Eagerly load the landing page (most common entry point)
 import Index from "./pages/Index";
 
 // Lazy load all other routes for better initial bundle size
-const Auth = lazy(() => import("./pages/Auth"));
+const Login = lazy(() => import("./pages/Login"));
 const OnboardingV2 = lazy(() => import("./pages/OnboardingV2"));
 const ThankYou = lazy(() => import("./pages/ThankYou"));
 const ReportDashboard = lazy(() => import("./pages/app/ReportDashboard"));
@@ -43,20 +41,14 @@ const PageLoader = () => (
 /**
  * App routes configuration
  * 
- * On app.riplacer.com:
- * - "/" → Dashboard (the main app experience)
- * - "/auth" → Auth page (for direct auth on app subdomain)
- * 
- * On riplacer.com:
+ * Single-domain routing:
  * - "/" → Landing page
  * - "/start" → Onboarding
- * - "/app" → Dashboard (legacy route, still works)
+ * - "/thank-you" → Post-onboarding
+ * - "/app" → Dashboard
  * - "/auth" → Auth page
  */
 const App = () => {
-  // Determine if we're on the app subdomain
-  const onAppSubdomain = isAppSubdomain();
-
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -64,33 +56,25 @@ const App = () => {
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <SubdomainRedirect />
             <ScrollToTop />
             <Suspense fallback={<PageLoader />}>
               <Routes>
-                {/* Root route: Dashboard on app subdomain, Landing page on main domain */}
-                <Route path="/" element={onAppSubdomain ? <ReportDashboard /> : <Index />} />
+                <Route path="/" element={<Index />} />
 
                 {/* Auth - works on both domains */}
-                <Route path="/auth" element={<Auth />} />
+                <Route path="/login" element={<Login />} />
 
-                {/* Main domain only routes (marketing, onboarding) */}
-                {!onAppSubdomain && (
-                  <>
-                    <Route path="/start" element={<OnboardingV2 />} />
-                    <Route path="/thank-you" element={<ThankYou />} />
-                    <Route path="/terms" element={<TermsOfService />} />
-                    <Route path="/privacy" element={<PrivacyPolicy />} />
-                    <Route path="/cookies" element={<CookiePolicy />} />
-                    <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
-                    <Route path="/disclaimer" element={<Disclaimer />} />
-                    <Route path="/refund" element={<RefundPolicy />} />
-                    <Route path="/pricing" element={<Pricing />} />
-                    <Route path="/verification-pending" element={<VerificationPending />} />
-                  </>
-                )}
+                <Route path="/start" element={<OnboardingV2 />} />
+                <Route path="/thank-you" element={<ThankYou />} />
+                <Route path="/terms" element={<TermsOfService />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/cookies" element={<CookiePolicy />} />
+                <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
+                <Route path="/disclaimer" element={<Disclaimer />} />
+                <Route path="/refund" element={<RefundPolicy />} />
+                <Route path="/pricing" element={<Pricing />} />
+                <Route path="/verification-pending" element={<VerificationPending />} />
 
-                {/* Legacy /app route - works on both domains for backwards compatibility */}
                 <Route path="/app" element={<ReportDashboard />} />
 
                 {/* 404 */}

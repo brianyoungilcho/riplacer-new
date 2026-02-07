@@ -169,7 +169,7 @@ export function OnboardingHeader({ data, step, user, onEditTerritory, onEditBuye
             )}
           </div>
         ) : (
-          <Link to="/auth" state={{ from: '/start' }}>
+          <Link to="/login" state={{ from: '/start' }}>
             <Button 
               size="sm" 
               variant="outline"

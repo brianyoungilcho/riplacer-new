@@ -12,11 +12,47 @@ interface StepTargetAccountProps {
   onBack: () => void;
 }
 
-const CATEGORY_PATTERNS: Record<string, string[]> = {
-  police: ['{city} PD', '{city} Police Department', '{county} Sheriff'],
-  fire: ['{city} Fire Department', '{city} Fire Rescue', '{county} Fire District'],
-  schools_k12: ['{city} School District', '{city} ISD', '{county} Schools'],
-  city_gov: ['City of {city}', '{county} County'],
+type PatternEntry = {
+  canonical: string;       // The ONE name shown in the UI
+  aliases?: string[];      // Additional strings matched against user input
+  source: 'city' | 'county';
+};
+
+const CATEGORY_PATTERNS: Record<string, PatternEntry[]> = {
+  police: [
+    { canonical: '{city} Police Department', aliases: ['{city} PD', '{city} Police Dept'], source: 'city' },
+  ],
+  sheriff: [
+    { canonical: "{county} Sheriff's Office", aliases: ['{county} Sheriff', '{county} SO'], source: 'county' },
+  ],
+  fire: [
+    { canonical: '{city} Fire Department', aliases: ['{city} FD', '{city} Fire Dept', '{city} Fire Rescue'], source: 'city' },
+    { canonical: '{county} Fire District', aliases: ['{county} Fire'], source: 'county' },
+  ],
+  ems: [
+    { canonical: '{city} EMS', aliases: ['{city} Emergency Medical Services', '{city} Ambulance'], source: 'city' },
+    { canonical: '{county} Emergency Services', aliases: ['{county} EMS'], source: 'county' },
+  ],
+  schools_k12: [
+    { canonical: '{city} School District', aliases: ['{city} ISD', '{city} Schools', '{city} USD', '{city} Public Schools'], source: 'city' },
+    { canonical: '{county} Schools', aliases: ['{county} School District', '{county} Public Schools'], source: 'county' },
+  ],
+  city_gov: [
+    { canonical: 'City of {city}', aliases: ['{city} City Hall', '{city} City Government'], source: 'city' },
+  ],
+  county_gov: [
+    { canonical: '{county} County', aliases: ['{county} County Government'], source: 'county' },
+  ],
+  transit: [
+    { canonical: '{city} Transit Authority', aliases: ['{city} Metro', '{city} Transit'], source: 'city' },
+  ],
+  utilities: [
+    { canonical: '{city} Utilities', aliases: ['{city} Water Department', '{city} Public Utilities'], source: 'city' },
+  ],
+  hospitals: [
+    { canonical: '{city} General Hospital', aliases: ['{city} Hospital', '{city} Medical Center'], source: 'city' },
+    { canonical: '{county} Medical Center', aliases: ['{county} Hospital'], source: 'county' },
+  ],
 };
 
 const getActivePatterns = (targetCategories: string[]) => {
@@ -62,53 +98,54 @@ export function StepTargetAccount({ data, updateData, onNext, onBack }: StepTarg
 
     const normalized = normalizeQuery(input);
 
-    const cityPatterns = activePatterns.filter((pattern) => pattern.includes('{city}'));
-    const countyPatterns = activePatterns.filter((pattern) => pattern.includes('{county}'));
+    const cityPatterns = activePatterns.filter((entry) => entry.source === 'city');
+    const countyPatterns = activePatterns.filter((entry) => entry.source === 'county');
 
     const cityMatches = US_CITIES.filter((city) => data.states.includes(city.state));
     const countyMatches = US_COUNTIES.filter((county) => data.states.includes(county.state));
 
-    const cityCandidates = cityMatches.flatMap((city) =>
-      cityPatterns.map((pattern) => ({
-        name: applyPattern(pattern, { city: city.city }),
-        population: city.population,
-      }))
-    );
+    const candidates = new Map<string, { canonical: string; population: number }>();
 
-    const countyCandidates = countyMatches.flatMap((county) =>
-      countyPatterns.map((pattern) => ({
-        name: applyPattern(pattern, { county: county.county }),
-        population: 0,
-      }))
-    );
+    // Process city candidates
+    for (const city of cityMatches) {
+      for (const entry of cityPatterns) {
+        const canonicalName = applyPattern(entry.canonical, { city: city.city });
+        const allVariants = [canonicalName, ...(entry.aliases || []).map(alias => applyPattern(alias, { city: city.city }))];
 
-    const candidates = [...cityCandidates, ...countyCandidates];
-    const filtered = candidates.filter((candidate) =>
-      normalize(candidate.name).includes(normalized)
-    );
-
-    const uniqueMap = new Map<string, { name: string; population: number }>();
-    for (const candidate of filtered) {
-      const key = normalize(candidate.name);
-      if (!uniqueMap.has(key)) {
-        uniqueMap.set(key, candidate);
+        const matches = allVariants.some(variant => normalize(variant).includes(normalized));
+        if (matches) {
+          candidates.set(canonicalName, { canonical: canonicalName, population: city.population });
+        }
       }
     }
 
-    const unique = Array.from(uniqueMap.values());
-    unique.sort((a, b) => {
-      const aStarts = normalize(a.name).startsWith(normalized);
-      const bStarts = normalize(b.name).startsWith(normalized);
+    // Process county candidates
+    for (const county of countyMatches) {
+      for (const entry of countyPatterns) {
+        const canonicalName = applyPattern(entry.canonical, { county: county.county });
+        const allVariants = [canonicalName, ...(entry.aliases || []).map(alias => applyPattern(alias, { county: county.county }))];
+
+        const matches = allVariants.some(variant => normalize(variant).includes(normalized));
+        if (matches) {
+          candidates.set(canonicalName, { canonical: canonicalName, population: 0 });
+        }
+      }
+    }
+
+    const uniqueCandidates = Array.from(candidates.values());
+    uniqueCandidates.sort((a, b) => {
+      const aStarts = normalize(a.canonical).startsWith(normalized);
+      const bStarts = normalize(b.canonical).startsWith(normalized);
       if (aStarts !== bStarts) {
         return aStarts ? -1 : 1;
       }
       if (a.population !== b.population) {
         return b.population - a.population;
       }
-      return a.name.localeCompare(b.name);
+      return a.canonical.localeCompare(b.canonical);
     });
 
-    return unique.slice(0, 6).map((candidate) => candidate.name);
+    return uniqueCandidates.slice(0, 6).map((candidate) => candidate.canonical);
   }, [activePatterns, data.states, hasPrereqs, input]);
 
   const canContinue = input.trim().length >= 2;

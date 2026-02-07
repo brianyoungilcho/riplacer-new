@@ -39,7 +39,7 @@ export default function Pricing() {
                                     Pricing
                                 </Button>
                             </Link>
-                            <Link to="/auth">
+                            <Link to="/login">
                                 <Button variant="ghost" className="text-gray-400 hover:text-white hover:bg-white/5">
                                     Sign In
                                 </Button>

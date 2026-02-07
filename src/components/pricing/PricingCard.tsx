@@ -82,7 +82,7 @@ export function PricingCard({
                     variant={highlighted ? "default" : buttonVariant}
                     asChild
                 >
-                    <Link to="/auth?mode=signup">{buttonText}</Link>
+                    <Link to="/login">{buttonText}</Link>
                 </Button>
             </CardFooter>
         </Card>

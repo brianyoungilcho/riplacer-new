@@ -13,7 +13,6 @@ import { StepResults } from './StepResults';
 import { Crosshair, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { redirectToApp } from '@/lib/domain';
 
 export interface OnboardingData {
   // Step 1
@@ -57,7 +56,7 @@ const initialData: OnboardingData = {
 };
 
 export function OnboardingPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, sendMagicLink } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [step, setStep] = useState(1);
@@ -147,42 +146,57 @@ export function OnboardingPage() {
       updateData({ email });
       localStorage.setItem('riplacer_onboarding_submission', JSON.stringify(submission));
 
-      const { error: authError } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: window.location.origin + '/thank-you',
-        },
-      });
+      const { error: pendingError } = await supabase
+        .from('pending_onboarding')
+        .upsert(
+          {
+            email,
+            data: submission,
+          },
+          { onConflict: 'email', returning: 'minimal' }
+        );
+
+      if (pendingError) {
+        console.error('Failed to save onboarding data:', pendingError);
+        const details = pendingError.message || pendingError.code || 'Unknown error';
+        toast.error(`Could not save your onboarding data: ${details}`);
+        setIsSaving(false);
+        return;
+      }
+
+      // If user is already logged in, go directly to thank-you
+      if (user) {
+        navigate('/thank-you', { state: { email, targetAccount: data.targetAccount } });
+        return;
+      }
+
+      const { error: authError } = await sendMagicLink(email, window.location.origin + '/thank-you');
 
       if (authError) throw authError;
 
       navigate('/verification-pending', { state: { email, targetAccount: data.targetAccount } });
     } catch (error) {
       console.error('Failed to submit onboarding:', error);
-      toast.error('Something went wrong. Please try again.');
+      const message = error instanceof Error ? error.message : 'Something went wrong';
+      toast.error(message);
     } finally {
       setIsSaving(false);
     }
-  }, [data, navigate, updateData]);
+  }, [data, navigate, updateData, user]);
 
-  // Redirect logged-in users who have completed onboarding to dashboard
+  // Redirect logged-in users who have a research request to dashboard
   useEffect(() => {
     const redirectToDashboard = async () => {
       if (!authLoading && user) {
-        // Check if user has completed onboarding
-        const submission = localStorage.getItem('riplacer_onboarding_submission');
-        if (submission) {
-          // User already completed onboarding, redirect to app subdomain with session
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            redirectToApp('/', {
-              access_token: session.access_token,
-              refresh_token: session.refresh_token,
-            });
-          } else {
-            // Fallback: redirect without session
-            redirectToApp('/');
-          }
+        const { data: existingRequest } = await supabase
+          .from('research_requests')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(1)
+          .maybeSingle();
+
+        if (existingRequest) {
+          window.location.href = '/app';
         }
       }
     };

@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      pending_onboarding: {
+        Row: {
+          created_at: string | null
+          data: Json
+          email: string
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          data: Json
+          email: string
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          data?: Json
+          email?: string
+          id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           company_name: string | null

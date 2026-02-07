@@ -7,29 +7,11 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Crosshair, Mail, Lock, ArrowRight, Loader2, ArrowLeft } from 'lucide-react';
 import { z } from 'zod';
-import { isAppSubdomain, redirectToApp, getMainUrl, getAppUrl } from '@/lib/domain';
-import { supabase } from '@/integrations/supabase/client';
 
 const authSchema = z.object({
   email: z.string().email('Please enter a valid email'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
-
-// Detect redirect loops: if we redirected to app subdomain recently and came back, don't redirect again
-const REDIRECT_LOOP_KEY = 'riplacer_last_redirect_to_app';
-const REDIRECT_LOOP_THRESHOLD_MS = 5000; // 5 seconds
-
-function isInRedirectLoop(): boolean {
-  const lastRedirect = sessionStorage.getItem(REDIRECT_LOOP_KEY);
-  if (!lastRedirect) return false;
-
-  const timeSinceLastRedirect = Date.now() - parseInt(lastRedirect, 10);
-  return timeSinceLastRedirect < REDIRECT_LOOP_THRESHOLD_MS;
-}
-
-function markRedirectToApp(): void {
-  sessionStorage.setItem(REDIRECT_LOOP_KEY, Date.now().toString());
-}
 
 export default function Auth() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -37,23 +19,16 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
-  const [signUpSuccess, setSignUpSuccess] = useState(false);
 
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
 
-  const onAppSubdomain = isAppSubdomain();
   const hasRedirected = useRef(false);
 
   // Check if user came from /start or has onboarding progress
   const getReturnPath = () => {
-    // On app subdomain, always go to dashboard (root)
-    if (onAppSubdomain) {
-      return '/';
-    }
-
     // Check URL state first (passed via navigate)
     const fromState = (location.state as { from?: string })?.from;
     if (fromState === '/start') {
@@ -73,7 +48,7 @@ export default function Auth() {
       }
     }
 
-    return '/';
+    return '/app';
   };
 
   const returnPath = getReturnPath();
@@ -86,46 +61,13 @@ export default function Auth() {
 
     if (user) {
       hasRedirected.current = true;
-
-      if (onAppSubdomain) {
-        // Already on app subdomain, just navigate to dashboard
-        navigate('/');
+      if (returnPath === '/start') {
+        navigate('/start');
       } else {
-        // On main domain - if returning to /start, stay on main domain
-        if (returnPath === '/start') {
-          navigate('/start');
-        } else {
-          // Check for redirect loop BEFORE redirecting to app subdomain
-          if (isInRedirectLoop()) {
-            console.log('[Auth] Detected redirect loop, staying on main domain');
-            // Reset the redirect flag so user can try again after a moment
-            hasRedirected.current = false;
-            return;
-          }
-          // Redirect to app subdomain with session transfer
-          handleRedirectToApp();
-        }
+        navigate('/app');
       }
     }
-  }, [user, navigate, returnPath, onAppSubdomain]);
-
-  const handleRedirectToApp = async () => {
-    // Mark the timestamp so we can detect loops
-    markRedirectToApp();
-
-    // Get current session to transfer
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      redirectToApp('/', {
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-      });
-    } else {
-      // Fallback: just redirect without session (will need to re-auth)
-      redirectToApp('/');
-    }
-  };
-
+  }, [user, navigate, returnPath]);
 
   const validateForm = () => {
     try {
@@ -173,9 +115,6 @@ export default function Auth() {
           variant: 'destructive',
         });
       } else {
-        // Clear any previous redirect loop marker on successful auth
-        sessionStorage.removeItem(REDIRECT_LOOP_KEY);
-
         toast({
           title: isSignUp ? 'Account created!' : 'Welcome back!',
           description: isSignUp ? 'Your account has been created successfully.' : 'You have been signed in.',
@@ -193,15 +132,12 @@ export default function Auth() {
     }
   };
 
-
-
   // Extract company domain from email for display
   const emailDomain = email.includes('@') ? email.split('@')[1] : null;
 
   // Back link depends on domain
-  const backLink = onAppSubdomain ? getMainUrl() : (returnPath === '/start' ? '/start' : '/');
-  const backLinkText = onAppSubdomain ? 'Back to homepage' : (returnPath === '/start' ? 'Back to setup' : 'Back to home');
-  const isExternalBackLink = onAppSubdomain;
+  const backLink = returnPath === '/start' ? '/start' : '/';
+  const backLinkText = returnPath === '/start' ? 'Back to setup' : 'Back to home';
 
   return (
     <div className="min-h-screen flex bg-white">
@@ -209,54 +145,31 @@ export default function Auth() {
       <div className="flex-1 flex flex-col justify-center px-8 py-12 lg:px-16">
         <div className="w-full max-w-md mx-auto">
           {/* Back button - returns to /start if user came from there */}
-          {isExternalBackLink ? (
-            <a
-              href={backLink}
-              className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors mb-8"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              {backLinkText}
-            </a>
-          ) : (
-            <Link
-              to={backLink}
-              className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors mb-8"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              {backLinkText}
-            </Link>
-          )}
+          <Link
+            to={backLink}
+            className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors mb-8"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {backLinkText}
+          </Link>
 
           {/* Logo */}
-          {onAppSubdomain ? (
-            <a
-              href={getMainUrl()}
-              className="flex items-center gap-2.5 mb-10"
-              aria-label="Riplacer home"
-            >
-              <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-                <Crosshair className="w-5 h-5 text-white" strokeWidth={2.5} />
-              </div>
-              <span className="font-bold text-2xl tracking-tight text-gray-900">Riplacer</span>
-            </a>
-          ) : (
-            <Link
-              to="/"
-              onClick={(e) => {
-                if (location.pathname === '/') {
-                  e.preventDefault();
-                  window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-                }
-              }}
-              className="flex items-center gap-2.5 mb-10"
-              aria-label="Riplacer home"
-            >
-              <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-                <Crosshair className="w-5 h-5 text-white" strokeWidth={2.5} />
-              </div>
-              <span className="font-bold text-2xl tracking-tight text-gray-900">Riplacer</span>
-            </Link>
-          )}
+          <Link
+            to="/"
+            onClick={(e) => {
+              if (location.pathname === '/') {
+                e.preventDefault();
+                window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+              }
+            }}
+            className="flex items-center gap-2.5 mb-10"
+            aria-label="Riplacer home"
+          >
+            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+              <Crosshair className="w-5 h-5 text-white" strokeWidth={2.5} />
+            </div>
+            <span className="font-bold text-2xl tracking-tight text-gray-900">Riplacer</span>
+          </Link>
 
           {/* Header */}
           <div className="mb-8">

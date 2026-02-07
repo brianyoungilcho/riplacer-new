@@ -47,41 +47,43 @@ export default function VerificationPending() {
 
     const handleDevBypass = async () => {
         if (!isDev) return;
-        
+
         setDevBypassing(true);
         try {
             // Create a test user with a unique email
-            const testEmail = `dev+${Date.now()}@riplacer.test`;
-            const testPassword = 'devtest123456';
-            
-            // Try to sign up (Supabase auto-confirms in local dev by default)
-            const { data, error } = await supabase.auth.signUp({
+            // Use a real email domain to pass validation
+            const timestamp = Date.now();
+            const testEmail = `dev.bypass.${timestamp}@gmail.com`;
+
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/01e20409-d0fe-4362-b5c5-68f8a38d42b6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VerificationPending.tsx:handleDevBypass',message:'Attempting dev bypass with gmail',data:{testEmail, supabaseUrl: import.meta.env.VITE_SUPABASE_URL},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
+            // #endregion
+
+            // Send magic link (Supabase auto-confirms in local dev by default)
+            const { error } = await supabase.auth.signInWithOtp({
                 email: testEmail,
-                password: testPassword,
+                options: {
+                    emailRedirectTo: window.location.origin + '/thank-you',
+                },
             });
 
             if (error) {
-                // If sign up fails, try signing in (maybe user already exists)
-                const { error: signInError } = await supabase.auth.signInWithPassword({
-                    email: testEmail,
-                    password: testPassword,
-                });
-                if (signInError) throw signInError;
+                throw error;
             }
 
-            // Check if we have a session
+            // In dev mode, Supabase might auto-confirm, so check for session
             const { data: { session } } = await supabase.auth.getSession();
-            
+
             if (session) {
                 toast.success('Dev bypass: Signed in as test user');
                 navigate('/thank-you', { state: { email: testEmail, targetAccount } });
-            } else if (data?.user && !data?.session) {
-                // User created but not confirmed (remote Supabase without auto-confirm)
-                toast.error('Dev bypass failed: Email confirmation required on remote Supabase. Enable "Auto-confirm users" in Supabase Auth settings for dev.');
             } else {
-                toast.error('Dev bypass failed: No session created');
+                toast.error('Dev bypass: Magic link sent but no immediate session. Check your email or enable auto-confirm in Supabase Auth settings for dev.');
             }
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/01e20409-d0fe-4362-b5c5-68f8a38d42b6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VerificationPending.tsx:handleDevBypass:catch',message:'Dev bypass error',data:{error},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
+            // #endregion
             console.error('Dev bypass error:', error);
             toast.error(`Dev bypass failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {

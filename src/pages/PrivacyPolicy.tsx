@@ -33,7 +33,7 @@ export default function PrivacyPolicy() {
             <h3 className="text-xl font-semibold mb-3 mt-6">2.1 Information You Provide to Us</h3>
             <p className="mb-4">We collect information that you provide directly to us, including:</p>
             <ul className="list-disc pl-6 mb-4 space-y-2">
-              <li><strong>Account Information:</strong> Name, email address, password, and other registration information</li>
+              <li><strong>Account Information:</strong> Name, email address, and other registration information</li>
               <li><strong>Profile Information:</strong> Company name, industry, business information, and other profile details</li>
               <li><strong>Territory and Location Data:</strong> Geographic boundaries, states, cities, regions, and territory definitions</li>
               <li><strong>Target Information:</strong> Government accounts, prospects, competitors, and related business intelligence</li>

@@ -6,7 +6,6 @@ drop table if exists prospect_dossiers;
 drop table if exists advantage_briefs;
 drop table if exists research_jobs;
 drop table if exists user_leads;
-drop table if exists agent_memory;
 
 -- Drop main tables
 drop table if exists prospects;

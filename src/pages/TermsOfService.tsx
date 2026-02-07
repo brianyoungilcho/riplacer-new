@@ -48,7 +48,7 @@ export default function TermsOfService() {
             <ul className="list-disc pl-6 mb-4 space-y-2">
               <li>Provide accurate, current, and complete information during registration</li>
               <li>Maintain and promptly update your account information</li>
-              <li>Maintain the security of your password and account</li>
+              <li>Maintain the security of your account</li>
               <li>Accept responsibility for all activities that occur under your account</li>
               <li>Notify us immediately of any unauthorized use of your account</li>
             </ul>
