@@ -7,7 +7,9 @@ import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { Loader2 } from "lucide-react";
+
 
 // Eagerly load the landing page (most common entry point)
 import Index from "./pages/Index";
@@ -92,6 +94,7 @@ const App = () => {
               </Suspense>
             </ErrorBoundary>
           </BrowserRouter>
+          <SpeedInsights />
         </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>
