@@ -1,12 +1,10 @@
 
-import { Mail, ArrowRight, Loader2, FlaskConical } from 'lucide-react';
+import { Mail, ArrowRight, Loader2 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-
-const isDev = import.meta.env.DEV;
 
 interface VerificationState {
     email?: string;
@@ -21,7 +19,6 @@ export default function VerificationPending() {
     const targetAccount = state.targetAccount || 'your target';
 
     const [resending, setResending] = useState(false);
-    const [devBypassing, setDevBypassing] = useState(false);
 
     const handleResend = async () => {
         if (!state.email) return;
@@ -45,51 +42,6 @@ export default function VerificationPending() {
         }
     };
 
-    const handleDevBypass = async () => {
-        if (!isDev) return;
-
-        setDevBypassing(true);
-        try {
-            // Create a test user with a unique email
-            // Use a real email domain to pass validation
-            const timestamp = Date.now();
-            const testEmail = `dev.bypass.${timestamp}@gmail.com`;
-
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/01e20409-d0fe-4362-b5c5-68f8a38d42b6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VerificationPending.tsx:handleDevBypass',message:'Attempting dev bypass with gmail',data:{testEmail, supabaseUrl: import.meta.env.VITE_SUPABASE_URL},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
-            // #endregion
-
-            // Send magic link (Supabase auto-confirms in local dev by default)
-            const { error } = await supabase.auth.signInWithOtp({
-                email: testEmail,
-                options: {
-                    emailRedirectTo: window.location.origin + '/thank-you',
-                },
-            });
-
-            if (error) {
-                throw error;
-            }
-
-            // In dev mode, Supabase might auto-confirm, so check for session
-            const { data: { session } } = await supabase.auth.getSession();
-
-            if (session) {
-                toast.success('Dev bypass: Signed in as test user');
-                navigate('/thank-you', { state: { email: testEmail, targetAccount } });
-            } else {
-                toast.error('Dev bypass: Magic link sent but no immediate session. Check your email or enable auto-confirm in Supabase Auth settings for dev.');
-            }
-        } catch (error) {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/01e20409-d0fe-4362-b5c5-68f8a38d42b6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VerificationPending.tsx:handleDevBypass:catch',message:'Dev bypass error',data:{error},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
-            // #endregion
-            console.error('Dev bypass error:', error);
-            toast.error(`Dev bypass failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        } finally {
-            setDevBypassing(false);
-        }
-    };
 
     return (
         <div className="min-h-screen bg-white flex items-center justify-center px-4 sm:px-8 py-16">
@@ -154,34 +106,6 @@ export default function VerificationPending() {
                     </Link>
                 </div>
 
-                {isDev && (
-                    <div className="mt-6 pt-6 border-t border-dashed border-orange-300">
-                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                            <div className="flex items-center gap-2 text-orange-700 text-sm font-medium mb-2">
-                                <FlaskConical className="w-4 h-4" />
-                                Dev Mode Only
-                            </div>
-                            <p className="text-xs text-orange-600 mb-3">
-                                Skip email verification by creating a test user. Only works in development.
-                            </p>
-                            <Button
-                                onClick={handleDevBypass}
-                                disabled={devBypassing}
-                                variant="outline"
-                                size="sm"
-                                className="w-full border-orange-300 text-orange-700 hover:bg-orange-100"
-                            >
-                                {devBypassing ? (
-                                    <span className="flex items-center gap-2">
-                                        <Loader2 className="w-3 h-3 animate-spin" /> Bypassing...
-                                    </span>
-                                ) : (
-                                    'Skip Verification (Dev Bypass)'
-                                )}
-                            </Button>
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );
