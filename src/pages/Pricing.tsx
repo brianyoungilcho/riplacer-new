@@ -68,7 +68,7 @@ export default function Pricing() {
                                     Pricing
                                 </Button>
                             </Link>
-                            <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
+                            <Link to="/login" onClick={() => setIsMenuOpen(false)}>
                                 <Button variant="ghost" className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/5">
                                     Sign In
                                 </Button>
@@ -195,7 +195,7 @@ export default function Pricing() {
                                 <h4 className="text-xs font-semibold text-white uppercase tracking-wider mb-3">Product</h4>
                                 <ul className="space-y-2 text-sm">
                                     <li><Link to="/pricing" className="text-gray-500 hover:text-white transition-colors">Pricing</Link></li>
-                                    <li><Link to="/auth" className="text-gray-500 hover:text-white transition-colors">Login</Link></li>
+                                    <li><Link to="/login" className="text-gray-500 hover:text-white transition-colors">Login</Link></li>
                                 </ul>
                             </div>
                         </div>

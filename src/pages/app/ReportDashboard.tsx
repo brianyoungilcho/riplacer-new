@@ -1,4 +1,4 @@
-import { Navigate, Outlet, Link } from "react-router-dom";
+import { Navigate, Outlet, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { User, LogOut, MoreVertical, Zap, UserCircle } from "lucide-react";
 import {
@@ -13,6 +13,7 @@ import {
 
 export default function ReportDashboard() {
   const { user, loading, signOut } = useAuth();
+  const navigate = useNavigate();
 
   if (loading) {
     return (
@@ -28,7 +29,7 @@ export default function ReportDashboard() {
 
   const handleSignOut = async () => {
     await signOut();
-    window.location.href = "/";
+    navigate("/");
   };
 
   return (

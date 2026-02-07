@@ -1,5 +1,5 @@
 import { Check, ArrowRight } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -27,6 +27,7 @@ type PendingOnboarding = {
 
 export default function ThankYou() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, loading } = useAuth();
   const state = (location.state as ThankYouState) || {};
   const [pendingOnboarding, setPendingOnboarding] = useState<PendingOnboarding | null>(null);
@@ -42,8 +43,8 @@ export default function ThankYou() {
   }, []);
 
   const handleGoToDashboard = useCallback(async () => {
-    window.location.href = '/app';
-  }, []);
+    navigate('/app');
+  }, [navigate]);
 
   useEffect(() => {
     if (!user || isStartingResearch || hasAttemptedStart.current) return;

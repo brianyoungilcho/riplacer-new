@@ -3,6 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { User } from '@supabase/supabase-js';
 import { OnboardingData } from './OnboardingPage';
 import { cn } from '@/lib/utils';
+import { STATE_ABBREV } from '@/constants/states';
+import { BUYER_CATEGORY_SHORT_LABELS } from '@/constants/buyerCategories';
 import { 
   Crosshair, 
   ChevronDown, 
@@ -16,35 +18,6 @@ import {
   User as UserIcon
 } from 'lucide-react';
 
-// State abbreviations
-const STATE_ABBREV: Record<string, string> = {
-  'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
-  'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
-  'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
-  'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
-  'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
-  'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
-  'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH',
-  'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
-  'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
-  'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY',
-};
-
-// Category labels
-const CATEGORY_LABELS: Record<string, string> = {
-  'police': 'Police',
-  'sheriff': 'Sheriff',
-  'fire': 'Fire Dept',
-  'ems': 'EMS',
-  'schools_k12': 'K-12 Schools',
-  'higher_ed': 'Higher Ed',
-  'city_gov': 'City Gov',
-  'county_gov': 'County Gov',
-  'state_agency': 'State Agency',
-  'transit': 'Transit',
-  'utilities': 'Utilities',
-  'hospitals': 'Hospitals',
-};
 
 interface WorkspaceSidebarProps {
   data: OnboardingData;
@@ -270,7 +243,7 @@ export function WorkspaceSidebar({
                     key={cat} 
                     className="px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600"
                   >
-                    {CATEGORY_LABELS[cat] || cat}
+                    {BUYER_CATEGORY_SHORT_LABELS[cat] || cat}
                   </span>
                 ))}
                 {data.targetCategories.length > 3 && (

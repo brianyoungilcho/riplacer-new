@@ -562,6 +562,15 @@ serve(async (req) => {
       );
     }
 
+    // Validate requestId is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(requestId)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid requestId format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { data: request, error: requestError } = await supabase
       .from("research_requests")
       .select("*")

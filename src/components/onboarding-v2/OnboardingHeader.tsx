@@ -3,20 +3,8 @@ import { User } from '@supabase/supabase-js';
 import { User as UserIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-
-// State abbreviations for compact display
-const STATE_ABBREV: Record<string, string> = {
-  'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
-  'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
-  'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
-  'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
-  'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
-  'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
-  'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH',
-  'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
-  'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
-  'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY',
-};
+import { STATE_ABBREV } from '@/constants/states';
+import { BUYER_CATEGORY_LABELS } from '@/constants/buyerCategories';
 
 interface OnboardingHeaderProps {
   data: OnboardingData;
@@ -56,31 +44,8 @@ export function OnboardingHeader({ data, step, user, onEditTerritory, onEditBuye
 
   const domain = extractDomain();
   
-  // Debug: log domain extraction (remove in production)
-  if (process.env.NODE_ENV === 'development' && (data.companyDomain || data.productDescription)) {
-    console.log('🔍 Domain extraction debug:', {
-      'companyDomain': data.companyDomain || '(not set)',
-      'productDescription': data.productDescription || '(not set)',
-      'extracted domain': domain || '(not found)',
-      'will render button': !!domain
-    });
-  }
   
   // Get category labels for pills
-  const CATEGORY_LABELS: Record<string, string> = {
-    'police': 'Police Departments',
-    'sheriff': 'Sheriff Offices',
-    'fire': 'Fire Departments',
-    'ems': 'EMS/Ambulance',
-    'schools_k12': 'K-12 Schools',
-    'higher_ed': 'Higher Education',
-    'city_gov': 'City Government',
-    'county_gov': 'County Government',
-    'state_agency': 'State Agencies',
-    'transit': 'Transit Authorities',
-    'utilities': 'Public Utilities',
-    'hospitals': 'Public Hospitals',
-  };
 
   // Show buyer category pills after step 3
   const showBuyerPills = step >= 4 && data.targetCategories.length > 0;
@@ -138,7 +103,7 @@ export function OnboardingHeader({ data, step, user, onEditTerritory, onEditBuye
                 className="px-3 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
                 title="Click to edit buyer types"
               >
-                {CATEGORY_LABELS[category] || category}
+                {BUYER_CATEGORY_LABELS[category] || category}
               </button>
             ))}
             {data.targetCategories.length > 3 && (

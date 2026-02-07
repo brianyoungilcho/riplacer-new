@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useProfile } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowRight, Crosshair, Eye, Users, TrendingUp, X, Check, Zap, Menu } from 'lucide-react';
 
@@ -72,7 +71,7 @@ function LandingPage() {
                   Pricing
                 </Button>
               </Link>
-              <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
+              <Link to="/login" onClick={() => setIsMenuOpen(false)}>
                 <Button variant="ghost" className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/5">
                   Sign In
                 </Button>

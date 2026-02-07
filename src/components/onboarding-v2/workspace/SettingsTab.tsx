@@ -5,6 +5,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { OnboardingData } from '../OnboardingPage';
 import { useAuth } from '@/hooks/useAuth';
+import { STATE_ABBREV } from '@/constants/states';
+import { BUYER_CATEGORY_LABELS } from '@/constants/buyerCategories';
 import {
   Loader2,
   Check,
@@ -19,34 +21,6 @@ interface SettingsTabProps {
   onEditCriteria: (step: number) => void;
 }
 
-// State abbreviations for display
-const STATE_ABBREV: Record<string, string> = {
-  'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
-  'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
-  'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
-  'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
-  'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
-  'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
-  'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH',
-  'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
-  'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
-  'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY',
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  'police': 'Police Departments',
-  'sheriff': 'Sheriff Offices',
-  'fire': 'Fire Departments',
-  'ems': 'EMS/Ambulance',
-  'schools_k12': 'K-12 Schools',
-  'higher_ed': 'Higher Education',
-  'city_gov': 'City Government',
-  'county_gov': 'County Government',
-  'state_agency': 'State Agencies',
-  'transit': 'Transit Authorities',
-  'utilities': 'Public Utilities',
-  'hospitals': 'Public Hospitals',
-};
 
 export function SettingsTab({ data, onEditCriteria }: SettingsTabProps) {
   const { user, signOut } = useAuth();
@@ -201,7 +175,7 @@ export function SettingsTab({ data, onEditCriteria }: SettingsTabProps) {
                     <p className="text-sm font-medium text-gray-500">Target Buyers</p>
                     <p className="text-gray-900 mt-0.5">
                       {data.targetCategories.length > 0
-                        ? data.targetCategories.map(c => CATEGORY_LABELS[c] || c).join(', ')
+                        ? data.targetCategories.map(c => BUYER_CATEGORY_LABELS[c] || c).join(', ')
                         : 'Not specified'}
                     </p>
                   </div>

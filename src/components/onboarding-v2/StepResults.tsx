@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar, Loader2, Mail, MessageSquare, RefreshCw } from 'lucide-react';
+import { STATE_ABBREV } from '@/constants/states';
+import { BUYER_CATEGORY_LABELS } from '@/constants/buyerCategories';
 
 interface StepResultsProps {
   data: OnboardingData;
@@ -13,35 +15,6 @@ interface StepResultsProps {
   isSaving?: boolean;
 }
 
-// State abbreviations
-const STATE_ABBREV: Record<string, string> = {
-  'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
-  'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
-  'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
-  'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
-  'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
-  'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
-  'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH',
-  'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
-  'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
-  'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY',
-};
-
-// Category labels
-const CATEGORY_LABELS: Record<string, string> = {
-  'police': 'Police Departments',
-  'sheriff': 'Sheriff Offices',
-  'fire': 'Fire Departments',
-  'ems': 'EMS/Ambulance',
-  'schools_k12': 'K-12 Schools',
-  'higher_ed': 'Higher Education',
-  'city_gov': 'City Government',
-  'county_gov': 'County Government',
-  'state_agency': 'State Agencies',
-  'transit': 'Transit Authorities',
-  'utilities': 'Public Utilities',
-  'hospitals': 'Public Hospitals',
-};
 
 const isValidEmail = (email: string) => /.+@.+\..+/.test(email.trim());
 
@@ -64,7 +37,7 @@ const formatCategories = (data: OnboardingData) => {
     return 'Not specified';
   }
 
-  return data.targetCategories.map(c => CATEGORY_LABELS[c] || c).join(', ');
+  return data.targetCategories.map(c => BUYER_CATEGORY_LABELS[c] || c).join(', ');
 };
 
 const truncate = (value: string, max = 120) => {

@@ -40,15 +40,6 @@ export default function ReportInbox() {
   const [isRegeneratingAll, setIsRegeneratingAll] = useState(false);
 
   const loadRequests = useCallback(async () => {
-    // 1. Log user authentication status
-    console.log("🔐 [ReportInbox] User authentication status:", {
-      user: user ? {
-        id: user.id,
-        email: user.email,
-        authenticated: true
-      } : null,
-      hasUser: !!user
-    });
 
     if (!user) {
       console.warn("⚠️ [ReportInbox] No user found, aborting loadRequests");
@@ -80,7 +71,6 @@ export default function ReportInbox() {
         ascending: false
       }
     };
-    console.log("📤 [ReportInbox] Supabase query parameters:", JSON.stringify(queryParams, null, 2));
 
     const { data, error } = await supabase
       .from("research_requests")

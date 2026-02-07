@@ -33,7 +33,7 @@ export function StepWhoYouSellTo({ data, updateData, onNext, onBack }: StepWhoYo
   // Sync with data prop
   useEffect(() => {
     setSelectedCategories(data.targetCategories);
-  }, []);
+  }, [data.targetCategories]);
 
   const handleCategoryToggle = (categoryId: string) => {
     setSelectedCategories(prev =>

@@ -18,7 +18,7 @@ export function StepCompetitors({ data, updateData, onNext, onBack }: StepCompet
   // Sync with data prop
   useEffect(() => {
     setSelectedCompetitors(data.competitors);
-  }, []);
+  }, [data.competitors]);
 
 
   const handleCompetitorToggle = (competitor: string) => {

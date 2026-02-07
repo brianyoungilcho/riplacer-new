@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Crosshair, Mail, ArrowRight, Loader2, ArrowLeft } from 'lucide-react';
 import { z } from 'zod';
+import { getReturnPath } from '@/lib/auth-utils';
 
 const authSchema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -25,31 +26,7 @@ export default function Login() {
 
   const hasRedirected = useRef(false);
 
-  // Check if user came from /start or has onboarding progress
-  const getReturnPath = () => {
-    // Check URL state first (passed via navigate)
-    const fromState = (location.state as { from?: string })?.from;
-    if (fromState === '/start') {
-      return fromState;
-    }
-
-    // Check if there's onboarding progress in localStorage
-    const onboardingProgress = localStorage.getItem('riplacer_onboarding_progress');
-    if (onboardingProgress) {
-      try {
-        const parsed = JSON.parse(onboardingProgress);
-        if (parsed.step && parsed.step > 1) {
-          return '/start';
-        }
-      } catch (e) {
-        // ignore parse errors
-      }
-    }
-
-    return '/app';
-  };
-
-  const returnPath = getReturnPath();
+  const returnPath = getReturnPath(location);
 
   useEffect(() => {
     // Prevent multiple redirects

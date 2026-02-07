@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ScrollToTop } from "@/components/ScrollToTop";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Loader2 } from "lucide-react";
 
 // Eagerly load the landing page (most common entry point)
@@ -43,13 +44,13 @@ const PageLoader = () => (
 
 /**
  * App routes configuration
- * 
+ *
  * Single-domain routing:
  * - "/" → Landing page
  * - "/start" → Onboarding
  * - "/thank-you" → Post-onboarding
  * - "/app" → Dashboard
- * - "/auth" → Auth page
+ * - "/login" → Login page
  */
 const App = () => {
   return (
@@ -60,8 +61,9 @@ const App = () => {
           <Sonner />
           <BrowserRouter>
             <ScrollToTop />
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
+            <ErrorBoundary>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
                 <Route path="/" element={<Index />} />
 
                 {/* Auth - works on both domains */}
@@ -87,7 +89,8 @@ const App = () => {
                 {/* 404 */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
-            </Suspense>
+              </Suspense>
+            </ErrorBoundary>
           </BrowserRouter>
         </TooltipProvider>
       </AuthProvider>

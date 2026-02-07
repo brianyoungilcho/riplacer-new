@@ -35,7 +35,6 @@ export default function VerificationPending() {
             if (error) throw error;
             toast.success('Verification email sent!');
         } catch (error) {
-            console.error('Error resending email:', error);
             toast.error('Failed to resend email. Please try again.');
         } finally {
             setResending(false);
