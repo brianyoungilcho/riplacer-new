@@ -527,7 +527,7 @@ export default function ReportInbox() {
     }
   };
 
-  const handleRegenerateAllReports = async () => {
+  async function handleRegenerateAllReports() {
     if (isRegeneratingAll) return;
 
     setIsRegeneratingAll(true);
@@ -613,7 +613,7 @@ export default function ReportInbox() {
     } finally {
       setIsRegeneratingAll(false);
     }
-  };
+  }
 
   const handleDeleteRequest = async (requestId: string) => {
     try {
