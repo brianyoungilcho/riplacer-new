@@ -170,14 +170,21 @@ export default function ReportDetail() {
       status: requestData?.status,
       created_at: requestData?.created_at,
       user_id: requestData?.user_id,
-      has_report: Array.isArray(requestData?.research_reports) && requestData.research_reports.length > 0,
-      report_count: Array.isArray(requestData?.research_reports) ? requestData.research_reports.length : 0,
-      reports: Array.isArray(requestData?.research_reports) ? requestData.research_reports.map((r: any) => ({
-        id: r.id,
-        summary: r.summary?.substring(0, 100),
-        generated_at: r.generated_at,
-        has_content: !!r.content
-      })) : []
+      has_report: requestData?.research_reports ? (Array.isArray(requestData.research_reports) ? requestData.research_reports.length > 0 : true) : false,
+      report_count: Array.isArray(requestData?.research_reports) ? requestData.research_reports.length : (requestData?.research_reports ? 1 : 0),
+      reports: Array.isArray(requestData?.research_reports)
+        ? requestData.research_reports.map((r: any) => ({
+            id: r.id,
+            summary: r.summary?.substring(0, 100),
+            generated_at: r.generated_at,
+            has_content: !!r.content
+          }))
+        : (requestData?.research_reports ? [{
+            id: requestData.research_reports.id,
+            summary: requestData.research_reports.summary?.substring(0, 100),
+            generated_at: requestData.research_reports.generated_at,
+            has_content: !!requestData.research_reports.content
+          }] : [])
     });
 
     setData(requestData);
@@ -212,7 +219,7 @@ export default function ReportDetail() {
           });
           setData(prev => prev ? {
             ...prev,
-            research_reports: [payload.new as ResearchReport],
+            research_reports: payload.new as ResearchReport,
             status: 'completed'
           } : null);
         }
@@ -343,7 +350,12 @@ export default function ReportDetail() {
     );
   }
 
-  const report = Array.isArray(data.research_reports) ? data.research_reports[0] : undefined;
+  // Handle both array (multiple reports) and object (single report) cases
+  const report = Array.isArray(data.research_reports)
+    ? data.research_reports[0]
+    : (data.research_reports && typeof data.research_reports === 'object')
+      ? data.research_reports
+      : undefined;
   console.log("📊 [ReportDetail] Report variable assignment:", {
     dataResearchReports: data.research_reports,
     isArray: Array.isArray(data.research_reports),
