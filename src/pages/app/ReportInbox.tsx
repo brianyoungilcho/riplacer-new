@@ -1,14 +1,17 @@
-import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Link } from "react-router-dom";
-import { ChevronRight, ChevronDown, Check, RefreshCw } from "lucide-react";
+import { ChevronRight, ChevronDown, Check, Plus, ArrowUpDown } from "lucide-react";
 
 type ResearchRequestWithReport = {
   id: string;
@@ -23,54 +26,56 @@ type ResearchRequestWithReport = {
   competitors: any;
   additional_context: string | null;
   research_reports: Array<{
+    id?: string;
     summary: string | null;
-  }> | null;
+    generated_at?: string | null;
+    content?: {
+      topInsight?: string;
+      summary?: string;
+      accountSnapshot?: {
+        type?: string;
+        size?: string;
+        budget?: string;
+        location?: string;
+      };
+    };
+  }> | {
+    summary: string | null;
+    content?: {
+      topInsight?: string;
+      summary?: string;
+      accountSnapshot?: {
+        type?: string;
+        size?: string;
+        budget?: string;
+        location?: string;
+      };
+    };
+  } | null;
 };
 
 export default function ReportInbox() {
   const { user } = useAuth();
+  const { profile } = useUserProfile();
   const navigate = useNavigate();
+  const { searchQuery } = useOutletContext<{ searchQuery: string }>();
   const [accountGroups, setAccountGroups] = useState<Map<string, ResearchRequestWithReport[]>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
   const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
   const [deletingAccount, setDeletingAccount] = useState<string | null>(null);
-  const [accountIntelligence, setAccountIntelligence] = useState<Map<string, any>>(new Map());
-  const [isRegeneratingAll, setIsRegeneratingAll] = useState(false);
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [isNewResearchOpen, setIsNewResearchOpen] = useState(false);
+  const [newAccountName, setNewAccountName] = useState("");
+  const [newContext, setNewContext] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadRequests = useCallback(async () => {
 
     if (!user) {
-      console.warn("⚠️ [ReportInbox] No user found, aborting loadRequests");
       return;
     }
-
-    // 2. Log exact query parameters being sent to Supabase
-    const queryParams = {
-      table: "research_requests",
-      select: `
-        id,
-        target_account,
-        status,
-        created_at,
-        product_description,
-        company_name,
-        company_domain,
-        territory_states,
-        target_categories,
-        competitors,
-        additional_context,
-        research_reports(id, summary, generated_at)
-      `,
-      filters: {
-        user_id: user.id
-      },
-      order: {
-        column: "created_at",
-        ascending: false
-      }
-    };
 
     const { data, error } = await supabase
       .from("research_requests")
@@ -86,72 +91,15 @@ export default function ReportInbox() {
         target_categories,
         competitors,
         additional_context,
-        research_reports(id, summary, generated_at)
+        research_reports(id, summary, content, generated_at)
       `)
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
-    // 3. Log raw response data from Supabase queries
-    console.log("📥 [ReportInbox] Raw Supabase response:", {
-      error: error ? {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
-      } : null,
-      dataCount: data?.length || 0,
-      rawData: data
-    });
-
     if (error) {
-      console.error("❌ [ReportInbox] Failed to load requests:", error);
       toast.error("Failed to load reports");
       setIsLoading(false);
       return;
-    }
-
-    // 4. Check specifically for Hartford PD report
-    const hartfordReports = (data || []).filter(req => 
-      req.target_account?.toLowerCase().includes("hartford") || 
-      req.target_account?.toLowerCase().includes("hartford pd")
-    );
-    
-    console.log("🔍 [ReportInbox] Hartford PD report search:", {
-      totalReports: data?.length || 0,
-      hartfordReportsFound: hartfordReports.length,
-      hartfordReports: hartfordReports.map(req => ({
-        id: req.id,
-        target_account: req.target_account,
-        status: req.status,
-        created_at: req.created_at,
-        has_report: Array.isArray(req.research_reports) && req.research_reports.length > 0,
-        report_count: Array.isArray(req.research_reports) ? req.research_reports.length : 0,
-        report_ids: Array.isArray(req.research_reports) ? req.research_reports.map(r => r.id) : [],
-        research_reports_type: typeof req.research_reports,
-        research_reports_isArray: Array.isArray(req.research_reports)
-      }))
-    });
-
-    // Log all target_accounts to see what we're getting
-    const allAccounts = (data || []).map(req => req.target_account);
-    console.log("📋 [ReportInbox] All target_accounts in response:", {
-      uniqueAccounts: [...new Set(allAccounts)],
-      accountCounts: allAccounts.reduce((acc, account) => {
-        acc[account] = (acc[account] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>)
-    });
-
-    // Log data for debugging
-    console.log("✅ [ReportInbox] Loaded requests:", data?.length || 0);
-    if (data && data.length > 0) {
-      console.log("📄 [ReportInbox] Sample request:", {
-        id: data[0].id,
-        target_account: data[0].target_account,
-        status: data[0].status,
-        has_report: Array.isArray(data[0].research_reports) && data[0].research_reports.length > 0,
-        report_count: Array.isArray(data[0].research_reports) ? data[0].research_reports.length : 0
-      });
     }
 
     // Group requests by target_account
@@ -162,19 +110,6 @@ export default function ReportInbox() {
         groups.set(account, []);
       }
       groups.get(account)!.push(request);
-    });
-
-    // 5. Log whether reports exist but are filtered out
-    console.log("🔀 [ReportInbox] Grouping results:", {
-      totalRequests: data?.length || 0,
-      accountGroups: Array.from(groups.entries()).map(([account, requests]) => ({
-        account,
-        requestCount: requests.length,
-        statuses: requests.map(r => r.status),
-        hasCompleted: requests.some(r => r.status === "completed"),
-        hasReports: requests.some(r => Array.isArray(r.research_reports) && r.research_reports.length > 0)
-      })),
-      hartfordInGroups: groups.has("Hartford PD") || Array.from(groups.keys()).some(k => k.toLowerCase().includes("hartford"))
     });
 
     // Sort requests within each group by created_at desc
@@ -197,7 +132,7 @@ export default function ReportInbox() {
 
   useEffect(() => {
     loadRequests();
-  }, []); // Only run once on mount
+  }, [loadRequests]);
 
   useEffect(() => {
     if (!user) return;
@@ -214,16 +149,8 @@ export default function ReportInbox() {
           filter: `user_id=eq.${user.id}`,
         },
         async (payload) => {
-          console.log('🔄 [ReportInbox] Research request updated:', {
-            requestId: payload.new.id,
-            target_account: payload.new.target_account,
-            oldStatus: payload.old.status,
-            newStatus: payload.new.status,
-            isHartford: payload.new.target_account?.toLowerCase().includes("hartford")
-          });
           // If status changed to completed, reload the full request with reports
           if (payload.new.status === 'completed' && payload.old.status !== 'completed') {
-            console.log('✅ [ReportInbox] Status changed to completed, reloading request:', payload.new.id);
             // Reload the full request data including research_reports
             const { data: updatedRequest, error: reloadError } = await supabase
               .from("research_requests")
@@ -239,17 +166,10 @@ export default function ReportInbox() {
                 target_categories,
                 competitors,
                 additional_context,
-                research_reports(id, summary, generated_at)
+                research_reports(id, summary, content, generated_at)
               `)
               .eq("id", payload.new.id)
               .single();
-
-            console.log('📥 [ReportInbox] Reloaded request after completion:', {
-              error: reloadError,
-              hasData: !!updatedRequest,
-              target_account: updatedRequest?.target_account,
-              reportCount: Array.isArray(updatedRequest?.research_reports) ? updatedRequest.research_reports.length : 0
-            });
 
             if (updatedRequest) {
               setAccountGroups(prev => {
@@ -301,12 +221,6 @@ export default function ReportInbox() {
           filter: `user_id=eq.${user.id}`,
         },
         async (payload) => {
-          console.log('📝 [ReportInbox] Research report inserted:', {
-            reportId: payload.new.id,
-            requestId: payload.new.request_id,
-            userId: payload.new.user_id,
-            matchesCurrentUser: payload.new.user_id === user?.id
-          });
           // Reload the full request data including the new report
           const { data: updatedRequest, error: reloadError } = await supabase
             .from("research_requests")
@@ -322,18 +236,10 @@ export default function ReportInbox() {
               target_categories,
               competitors,
               additional_context,
-              research_reports(id, summary, generated_at)
+              research_reports(id, summary, content, generated_at)
             `)
             .eq("id", payload.new.request_id)
             .single();
-
-          console.log('📥 [ReportInbox] Reloaded request after report insert:', {
-            error: reloadError,
-            hasData: !!updatedRequest,
-            target_account: updatedRequest?.target_account,
-            isHartford: updatedRequest?.target_account?.toLowerCase().includes("hartford"),
-            reportCount: updatedRequest?.research_reports?.length || 0
-          });
 
           if (updatedRequest) {
             setAccountGroups(prev => {
@@ -394,11 +300,30 @@ export default function ReportInbox() {
     return date.toLocaleDateString();
   };
 
+  const getReportContent = (request: ResearchRequestWithReport) => {
+    if (!request.research_reports) return null;
+    const report = Array.isArray(request.research_reports)
+      ? request.research_reports[0]
+      : request.research_reports;
+    return report?.content ?? null;
+  };
+
   const getSummaryExcerpt = (request: ResearchRequestWithReport) => {
-    if (request.status === "completed" && Array.isArray(request.research_reports) && request.research_reports[0]?.summary) {
-      return request.research_reports[0].summary.length > 120
-        ? `${request.research_reports[0].summary.substring(0, 120)}...`
-        : request.research_reports[0].summary;
+    if (request.status === "completed") {
+      const report = Array.isArray(request.research_reports)
+        ? request.research_reports[0]
+        : request.research_reports;
+      const content = getReportContent(request);
+      const candidate =
+        content?.topInsight
+        || content?.summary
+        || report?.summary;
+
+      if (candidate) {
+        return candidate.length > 120
+          ? `${candidate.substring(0, 120)}...`
+          : candidate;
+      }
     }
 
     switch (request.status) {
@@ -409,37 +334,151 @@ export default function ReportInbox() {
       case "failed":
         return "Research failed. Click to retry or contact support.";
       case "completed":
-        return "Report is being processed...";
+        return "Report available. Expand to see details.";
       default:
         return "";
     }
   };
 
+  const normalizedQuery = useMemo(() => searchQuery.trim().toLowerCase(), [searchQuery]);
+
+  const sortedAndFilteredGroups = useMemo(() => {
+    const entries = Array.from(accountGroups.entries());
+    const filteredEntries = normalizedQuery
+      ? entries.filter(([account, requests]) => {
+          const accountMatch = account.toLowerCase().includes(normalizedQuery);
+          const reportMatch = requests.some((request) => {
+            const report = Array.isArray(request.research_reports)
+              ? request.research_reports[0]
+              : request.research_reports;
+            const content = getReportContent(request);
+            const candidates = [
+              content?.topInsight,
+              content?.summary,
+              report?.summary,
+            ].filter(Boolean) as string[];
+            return candidates.some((text) => text.toLowerCase().includes(normalizedQuery));
+          });
+          return accountMatch || reportMatch;
+        })
+      : entries;
+
+    const sortedEntries = filteredEntries.map(([account, requests]) => {
+      const sortedRequests = [...requests].sort((a, b) => {
+        const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        return sortOrder === "newest" ? -diff : diff;
+      });
+      return [account, sortedRequests] as const;
+    });
+
+    sortedEntries.sort(([, a], [, b]) => {
+      const aDate = a[0]?.created_at ? new Date(a[0].created_at).getTime() : 0;
+      const bDate = b[0]?.created_at ? new Date(b[0].created_at).getTime() : 0;
+      return sortOrder === "newest" ? bDate - aDate : aDate - bDate;
+    });
+
+    return sortedEntries;
+  }, [accountGroups, normalizedQuery, sortOrder]);
+
   const handleRowClick = (requestId: string) => {
     navigate(`/app/report/${requestId}`);
   };
 
-  const fetchAccountIntelligence = async (accountName: string, requests: ResearchRequestWithReport[]) => {
-    // Find the most recent completed request for this account
-    const completedRequest = requests
-      .filter(req => req.status === "completed")
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+  const openNewResearchDialog = (accountName?: string) => {
+    setNewAccountName(accountName || "");
+    setNewContext("");
+    setIsNewResearchOpen(true);
+  };
 
-    if (!completedRequest) return;
-
+  const getCompanyDomain = () => {
+    const domain = profile?.onboarding_data?.companyDomain;
+    if (domain) return domain;
+    const website = profile?.company_website;
+    if (!website) return null;
     try {
-      const { data: memories } = await supabase
-        .from("agent_memory")
-        .select("memory_type, content")
-        .eq("request_id", completedRequest.id)
-        .in("memory_type", ["org_profile"]);
-
-      const orgProfile = memories?.find(m => m.memory_type === "org_profile");
-      if (orgProfile) {
-        setAccountIntelligence(prev => new Map(prev).set(accountName, orgProfile.content));
-      }
+      const normalized = website.startsWith("http") ? website : `https://${website}`;
+      return new URL(normalized).hostname;
     } catch (error) {
-      console.error("Failed to fetch account intelligence:", error);
+      return website;
+    }
+  };
+
+  const handleCreateResearch = async () => {
+    if (!user) {
+      toast.error("Please sign in to start research.");
+      return;
+    }
+
+    const accountName = newAccountName.trim();
+    if (!accountName) {
+      toast.error("Account name is required.");
+      return;
+    }
+
+    const productDescription = profile?.product_description || profile?.onboarding_data?.productDescription;
+    if (!productDescription) {
+      toast.error("Please complete your profile before starting research.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { data: insertedRequest, error } = await supabase
+        .from("research_requests")
+        .insert({
+          user_id: user.id,
+          target_account: accountName,
+          product_description: productDescription,
+          company_name: profile?.company_name || profile?.onboarding_data?.companyName || null,
+          company_domain: getCompanyDomain(),
+          territory_states: profile?.onboarding_data?.states || [],
+          target_categories: profile?.onboarding_data?.targetCategories || [],
+          competitors: profile?.competitor_names || profile?.onboarding_data?.competitors || [],
+          additional_context: newContext.trim() || null,
+          status: "pending",
+        })
+        .select(`
+          id,
+          target_account,
+          status,
+          created_at,
+          product_description,
+          company_name,
+          company_domain,
+          territory_states,
+          target_categories,
+          competitors,
+          additional_context,
+          research_reports(id, summary, generated_at)
+        `)
+        .single();
+
+      if (error) {
+        toast.error("Failed to create research request.");
+        return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const { error: invokeError } = await supabase.functions.invoke("research-target-account", {
+        body: { requestId: insertedRequest.id },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+
+      if (invokeError) {
+        toast.warning("Research was created but could not start. Please try again.");
+      } else {
+        toast.success("Research started. You'll see updates here shortly.");
+      }
+
+      await loadRequests();
+      setIsNewResearchOpen(false);
+      setNewAccountName("");
+      setNewContext("");
+    } catch (error) {
+      toast.error("Failed to start research. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -447,15 +486,11 @@ export default function ReportInbox() {
     event.stopPropagation(); // Prevent navigation when clicking expand/collapse
     setExpandedRows(prev => {
       const newSet = new Set(prev);
-      const isExpanding = !newSet.has(accountName);
 
       if (newSet.has(accountName)) {
         newSet.delete(accountName);
       } else {
         newSet.add(accountName);
-        // Fetch account intelligence when expanding
-        const requests = accountGroups.get(accountName) || [];
-        fetchAccountIntelligence(accountName, requests);
       }
       return newSet;
     });
@@ -472,14 +507,12 @@ export default function ReportInbox() {
 
       const token = sessionData.session?.access_token;
 
-      const { data: invokeData, error: invokeError } = await supabase.functions.invoke("research-target-account", {
+      const { error: invokeError } = await supabase.functions.invoke("research-target-account", {
         body: { requestId },
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
 
       if (invokeError) {
-        console.error("Failed to retry research:", invokeError);
-
         if (invokeError && typeof invokeError === 'object' && 'context' in invokeError) {
              const response = (invokeError as any).context as Response;
              if (response?.status === 401) {
@@ -506,7 +539,6 @@ export default function ReportInbox() {
         return newGroups;
       });
     } catch (error) {
-      console.error("Failed to retry research:", error);
       toast.error("We could not restart the research. Please try again.");
     } finally {
       setRetryingIds(prev => {
@@ -517,94 +549,6 @@ export default function ReportInbox() {
     }
   };
 
-  async function handleRegenerateAllReports() {
-    if (isRegeneratingAll) return;
-
-    setIsRegeneratingAll(true);
-    let successCount = 0;
-    let errorCount = 0;
-
-    try {
-      // Get all requests that have reports (completed ones)
-      const allRequests = Array.from(accountGroups.values()).flat();
-      const requestsWithReports = allRequests.filter(req =>
-        req.status === 'completed' || Array.isArray(req.research_reports) && req.research_reports.length > 0
-      );
-
-      if (requestsWithReports.length === 0) {
-        toast.info("No completed reports found to regenerate");
-        setIsRegeneratingAll(false);
-        return;
-      }
-
-      console.log(`🚀 Regenerating ${requestsWithReports.length} reports with multi-agent pipeline`);
-
-      for (const request of requestsWithReports) {
-        try {
-          // Reset to pending
-          const { error: updateError } = await supabase
-            .from('research_requests')
-            .update({
-              status: 'pending',
-              research_started_at: null,
-              research_completed_at: null
-            })
-            .eq('id', request.id);
-
-          if (updateError) {
-            console.error(`❌ Failed to reset ${request.target_account}:`, updateError);
-            errorCount++;
-            continue;
-          }
-
-          // Start new research with multi-agent pipeline
-          const { error: invokeError } = await supabase.functions.invoke('research-target-account', {
-            body: { requestId: request.id },
-          });
-
-          if (invokeError) {
-            console.error(`❌ Failed to start research for ${request.target_account}:`, invokeError);
-            errorCount++;
-          } else {
-            console.log(`✅ Started multi-agent research for ${request.target_account}`);
-            successCount++;
-
-            // Update local state to show pending
-            setAccountGroups(prev => {
-              const newGroups = new Map(prev);
-              for (const [account, requests] of newGroups) {
-                const requestIndex = requests.findIndex(req => req.id === request.id);
-                if (requestIndex !== -1) {
-                  requests[requestIndex] = { ...requests[requestIndex], status: 'pending' };
-                  break;
-                }
-              }
-              return newGroups;
-            });
-          }
-        } catch (error) {
-          console.error(`❌ Error processing ${request.target_account}:`, error);
-          errorCount++;
-        }
-      }
-
-      if (successCount > 0) {
-        toast.success(`Regenerated ${successCount} reports with enhanced multi-agent research!`);
-        if (errorCount > 0) {
-          toast.warning(`${errorCount} reports failed to regenerate`);
-        }
-      } else {
-        toast.error("Failed to regenerate any reports");
-      }
-
-    } catch (error) {
-      console.error("❌ Unexpected error in regenerate all:", error);
-      toast.error("An unexpected error occurred");
-    } finally {
-      setIsRegeneratingAll(false);
-    }
-  }
-
   const handleDeleteRequest = async (requestId: string) => {
     try {
       const { error } = await supabase
@@ -613,7 +557,6 @@ export default function ReportInbox() {
         .eq("id", requestId);
 
       if (error) {
-        console.error("Failed to delete request:", error);
         toast.error("Failed to delete report");
         return;
       }
@@ -638,7 +581,6 @@ export default function ReportInbox() {
       toast.success("Report deleted successfully");
       setDeletingRequestId(null);
     } catch (error) {
-      console.error("Failed to delete request:", error);
       toast.error("Failed to delete report");
     }
   };
@@ -652,7 +594,6 @@ export default function ReportInbox() {
         .eq("user_id", user?.id);
 
       if (error) {
-        console.error("Failed to delete account:", error);
         toast.error("Failed to delete account");
         return;
       }
@@ -667,7 +608,6 @@ export default function ReportInbox() {
       toast.success("Account deleted successfully");
       setDeletingAccount(null);
     } catch (error) {
-      console.error("Failed to delete account:", error);
       toast.error("Failed to delete account");
     }
   };
@@ -689,252 +629,209 @@ export default function ReportInbox() {
     );
   }
 
-  if (accountGroups.size === 0) {
-    return (
-      <div className="text-center py-12">
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">No reports yet</h2>
-        <p className="text-gray-600 mb-6">Complete onboarding to trigger your first research report. Your reports will appear here as a scannable list, just like your email inbox.</p>
-        <div className="flex flex-col gap-3 items-center">
-          <Link
-            to="/start"
-            className="text-primary hover:text-primary/80 font-medium"
-          >
-            Go to onboarding →
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  // Log what's being rendered
-  console.log("🎨 [ReportInbox] Rendering component:", {
-    accountGroupsCount: accountGroups.size,
-    accountNames: Array.from(accountGroups.keys()),
-    hartfordInRender: Array.from(accountGroups.keys()).some(k => k.toLowerCase().includes("hartford")),
-    expandedRows: Array.from(expandedRows)
-  });
-
   return (
-    <div className="space-y-0">
-      {/* Regenerate All Reports Button */}
-      <div className="mb-6">
-        <button
-          onClick={handleRegenerateAllReports}
-          disabled={isRegeneratingAll}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${isRegeneratingAll ? 'animate-spin' : ''}`} />
-          {isRegeneratingAll ? 'Regenerating All Reports...' : 'Regenerate All Reports'}
-        </button>
-        <p className="text-sm text-gray-600 mt-2">
-          This will restart research for all your reports using the new multi-agent pipeline with enhanced insights.
-        </p>
+    <div className="space-y-4">
+      {/* Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Button onClick={() => openNewResearchDialog()} className="gap-2">
+            <Plus className="w-4 h-4" />
+            New Research
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setSortOrder(sortOrder === "newest" ? "oldest" : "newest")}
+            className="gap-2"
+          >
+            <ArrowUpDown className="w-4 h-4" />
+            Sort: {sortOrder === "newest" ? "Newest" : "Oldest"}
+          </Button>
+        </div>
+        {accountGroups.size > 0 && (
+          <span className="text-sm text-gray-500">
+            {normalizedQuery && sortedAndFilteredGroups.length !== accountGroups.size
+              ? `Showing ${sortedAndFilteredGroups.length} of ${accountGroups.size} accounts`
+              : `${accountGroups.size} account${accountGroups.size === 1 ? "" : "s"}`}
+          </span>
+        )}
       </div>
 
-      {Array.from(accountGroups.entries()).map(([accountName, requests], accountIndex) => {
-        const latestRequest = requests[0]; // Already sorted by created_at desc
-        const reportCount = requests.length;
-        const isExpanded = expandedRows.has(accountName);
+      {accountGroups.size === 0 ? (
+        <div className="text-center py-12">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">No accounts yet</h2>
+          <p className="text-gray-600 mb-6">
+            Start your first research by adding an account. Reports will appear here as a scannable list.
+          </p>
+          <Button onClick={() => openNewResearchDialog()} className="gap-2">
+            <Plus className="w-4 h-4" />
+            New Research
+          </Button>
+        </div>
+      ) : sortedAndFilteredGroups.length === 0 ? (
+        <div className="text-center py-12">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">No matches</h2>
+          <p className="text-gray-600">Try a different search term.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {sortedAndFilteredGroups.map(([accountName, requests], accountIndex) => {
+            const latestRequest = requests[0];
+            const reportCount = requests.length;
+            const isExpanded = expandedRows.has(accountName);
+            const latestCompletedRequest = requests.reduce<ResearchRequestWithReport | null>((latest, request) => {
+              if (request.status !== "completed") return latest;
+              if (!latest) return request;
+              return new Date(request.created_at).getTime() > new Date(latest.created_at).getTime()
+                ? request
+                : latest;
+            }, null);
+            const accountSnapshot = latestCompletedRequest
+              ? getReportContent(latestCompletedRequest)?.accountSnapshot
+              : null;
 
-        // Log Hartford PD specifically when rendering
-        if (accountName.toLowerCase().includes("hartford")) {
-          console.log("🏛️ [ReportInbox] Rendering Hartford PD account:", {
-            accountName,
-            reportCount,
-            requests: requests.map(r => ({
-              id: r.id,
-              status: r.status,
-              created_at: r.created_at,
-              has_report: Array.isArray(r.research_reports) && r.research_reports.length > 0
-            }))
-          });
-        }
-
-        return (
-          <div key={accountName}>
-            {/* Account Row */}
-            <div
-              className="bg-white border rounded-lg p-4 hover:bg-gray-50 hover:shadow-sm cursor-pointer transition-all duration-200 hover:scale-[1.01] border-gray-200"
-              onClick={(e) => toggleExpanded(accountName, e)}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={(e) => toggleExpanded(accountName, e)}
-                    className="p-1 hover:bg-gray-100 rounded transition-transform duration-200"
-                    aria-label={isExpanded ? "Collapse account" : "Expand account"}
-                  >
-                    {isExpanded ? (
-                      <ChevronDown className="w-4 h-4 text-gray-600" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-gray-600" />
-                    )}
-                  </button>
-                  <h3 className="font-semibold text-gray-900 text-lg leading-tight">
-                    {accountName}
-                  </h3>
-                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                    {reportCount} report{reportCount !== 1 ? 's' : ''}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <p className="text-xs text-gray-500">
-                    Latest: {formatDate(latestRequest.created_at)}
-                  </p>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeletingAccount(accountName);
-                    }}
-                    className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                    aria-label={`Delete all reports for ${accountName}`}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 011-1v1z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <p className="text-gray-600 text-sm leading-relaxed">
-                {getSummaryExcerpt(latestRequest)}
-              </p>
-            </div>
-
-            {/* Expanded Account Content */}
-            {isExpanded && (
-              <div className="bg-gray-50 border-x border-b border-gray-200 rounded-b-lg px-4 py-4 mx-0 -mt-2 mb-2">
-                <div className="space-y-4">
-                  {/* List of Report Runs */}
-                  <div className="space-y-2">
-                    {requests.map((request) => (
-                      <div key={request.id} className="flex items-center justify-between bg-white p-3 rounded border">
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm text-gray-600 font-medium">
-                            {formatDate(request.created_at)}
-                          </span>
-                          {getStatusBadge(request.status)}
-                          {request.status === "completed" && (
-                            <button
-                              onClick={() => handleRowClick(request.id)}
-                              className="text-sm text-primary hover:text-primary/80 font-medium"
-                            >
-                              View Report →
-                            </button>
-                          )}
-                          {request.status === "failed" && (
-                            <button
-                              onClick={(e) => handleRetryResearch(request.id, e)}
-                              disabled={retryingIds.has(request.id)}
-                              className="text-sm text-orange-600 hover:text-orange-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                            >
-                              {retryingIds.has(request.id) ? "Re-queuing..." : "Re-queue"}
-                            </button>
-                          )}
-                        </div>
+            return (
+              <div key={accountName}>
+                {/* Account Card */}
+                <div
+                  className="bg-white border rounded-lg p-4 hover:bg-gray-50 hover:shadow-sm cursor-pointer transition-all border-gray-200"
+                  onClick={(event) => toggleExpanded(accountName, event)}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeletingRequestId(request.id);
-                          }}
-                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                          aria-label={`Delete report from ${formatDate(request.created_at)}`}
+                          onClick={(event) => toggleExpanded(accountName, event)}
+                          className="p-1 hover:bg-gray-100 rounded transition-transform duration-200"
+                          aria-label={isExpanded ? "Collapse account" : "Expand account"}
                         >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
+                          {isExpanded ? (
+                            <ChevronDown className="w-4 h-4 text-gray-600" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-gray-600" />
+                          )}
                         </button>
+                        <h3 className="font-semibold text-gray-900 text-lg leading-tight">
+                          {accountName}
+                        </h3>
+                        {getStatusBadge(latestRequest.status)}
                       </div>
-                    ))}
-                  </div>
-
-                  <Separator />
-
-                  {/* Account Intelligence */}
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold text-gray-900">Account Intelligence</h3>
-
-                    {accountIntelligence.has(accountName) ? (
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
-                        {(() => {
-                          const intel = accountIntelligence.get(accountName);
-                          return (
-                            <>
-                              {intel?.mission && (
-                                <div>
-                                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Type</span>
-                                  <p className="text-gray-900 text-sm mt-1">{intel.mission}</p>
-                                </div>
-                              )}
-
-                              {intel?.size && (
-                                <div>
-                                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Size</span>
-                                  <div className="text-gray-900 text-sm mt-1 space-y-1">
-                                    {intel.size.employees && <div>~{intel.size.employees.toLocaleString()} employees</div>}
-                                    {intel.size.population && <div>Serves ~{intel.size.population.toLocaleString()} people</div>}
-                                    {intel.size.coverage && <div>Coverage: {intel.size.coverage}</div>}
-                                  </div>
-                                </div>
-                              )}
-
-                              {intel?.annualBudget && (
-                                <div>
-                                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Budget</span>
-                                  <p className="text-gray-900 text-sm mt-1">${intel.annualBudget.toLocaleString()}</p>
-                                </div>
-                              )}
-
-                              {intel?.leadership && intel.leadership.length > 0 && (
-                                <div>
-                                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Leadership</span>
-                                  <div className="text-gray-900 text-sm mt-1 space-y-1">
-                                    {intel.leadership.slice(0, 2).map((leader: any, idx: number) => (
-                                      <div key={idx}>
-                                        {leader.title}: {leader.name}
-                                        {leader.tenure && <span className="text-gray-600"> ({leader.tenure})</span>}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {intel?.jurisdiction && (
-                                <div>
-                                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Jurisdiction</span>
-                                  <p className="text-gray-900 text-sm mt-1">{intel.jurisdiction}</p>
-                                </div>
-                              )}
-
-                              {intel?.keyFacts && intel.keyFacts.length > 0 && (
-                                <div>
-                                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Key Facts</span>
-                                  <ul className="text-gray-900 text-sm mt-1 list-disc list-inside space-y-1">
-                                    {intel.keyFacts.slice(0, 3).map((fact: string, idx: number) => (
-                                      <li key={idx}>{fact}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                            </>
-                          );
-                        })()}
+                      <p className="text-gray-600 text-sm leading-relaxed">
+                        {getSummaryExcerpt(latestRequest)}
+                      </p>
+                      <div className="flex items-center gap-3 text-xs text-gray-500">
+                        <span>Last researched: {formatDate(latestRequest.created_at)}</span>
+                        <span>{reportCount} report{reportCount !== 1 ? "s" : ""}</span>
                       </div>
-                    ) : (
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                        <div className="text-center text-gray-500 text-sm">
-                          Research in progress... Intelligence will appear here when complete.
-                        </div>
-                      </div>
-                    )}
+                    </div>
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setDeletingAccount(accountName);
+                      }}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      aria-label={`Delete all reports for ${accountName}`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 011-1v1z" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
-              </div>
-            )}
 
-            {accountIndex < accountGroups.size - 1 && <div className="h-2" />}
-          </div>
-        );
-      })}
+                {/* Expanded Account Content */}
+                {isExpanded && (
+                  <div className="bg-gray-50 border-x border-b border-gray-200 rounded-b-lg px-4 py-4 mx-0 -mt-2 mb-2">
+                    <div className="space-y-4">
+                      {accountSnapshot && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-4">
+                          <h3 className="text-sm font-semibold text-gray-900 mb-3">Account Snapshot</h3>
+                          <div className="flex flex-wrap gap-2 text-xs text-gray-700">
+                            {[
+                              { label: "Type", value: accountSnapshot.type },
+                              { label: "Size", value: accountSnapshot.size },
+                              { label: "Budget", value: accountSnapshot.budget },
+                              { label: "Location", value: accountSnapshot.location },
+                            ]
+                              .filter((item) => item.value)
+                              .map((item) => (
+                                <span
+                                  key={item.label}
+                                  className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1"
+                                >
+                                  <span className="text-gray-500">{item.label}:</span>
+                                  <span className="font-medium text-gray-900">{item.value}</span>
+                                </span>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-gray-900">Report History</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openNewResearchDialog(accountName);
+                          }}
+                        >
+                          Run New Research
+                        </Button>
+                      </div>
+
+                      {/* List of Report Runs */}
+                      <div className="space-y-2">
+                        {requests.map((request) => (
+                          <div key={request.id} className="flex items-center justify-between bg-white p-3 rounded border">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <span className="text-sm text-gray-600 font-medium">
+                                {formatDate(request.created_at)}
+                              </span>
+                              {getStatusBadge(request.status)}
+                              {request.status === "completed" && (
+                                <button
+                                  onClick={() => handleRowClick(request.id)}
+                                  className="text-sm text-primary hover:text-primary/80 font-medium"
+                                >
+                                  View Report →
+                                </button>
+                              )}
+                              {request.status === "failed" && (
+                                <button
+                                  onClick={(event) => handleRetryResearch(request.id, event)}
+                                  disabled={retryingIds.has(request.id)}
+                                  className="text-sm text-orange-600 hover:text-orange-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                                >
+                                  {retryingIds.has(request.id) ? "Re-queuing..." : "Retry"}
+                                </button>
+                              )}
+                            </div>
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setDeletingRequestId(request.id);
+                              }}
+                              className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                              aria-label={`Delete report from ${formatDate(request.created_at)}`}
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {accountIndex < sortedAndFilteredGroups.length - 1 && <div className="h-2" />}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Delete Request Confirmation Dialog */}
       <AlertDialog open={!!deletingRequestId} onOpenChange={() => setDeletingRequestId(null)}>
@@ -978,6 +875,53 @@ export default function ReportInbox() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* New Research Dialog */}
+      <Dialog open={isNewResearchOpen} onOpenChange={setIsNewResearchOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>New Research</DialogTitle>
+            <DialogDescription>
+              We will use your profile to personalize the research for this account.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Account name
+              </label>
+              <Input
+                value={newAccountName}
+                onChange={(event) => setNewAccountName(event.target.value)}
+                placeholder="e.g. Hartford Police Department"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Additional context (optional)
+              </label>
+              <Textarea
+                value={newContext}
+                onChange={(event) => setNewContext(event.target.value)}
+                placeholder="Any specific angles or timing to research?"
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setIsNewResearchOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleCreateResearch} disabled={isSubmitting}>
+              {isSubmitting ? "Starting..." : "Start Research"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

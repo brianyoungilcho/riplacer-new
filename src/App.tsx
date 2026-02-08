@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -21,7 +21,6 @@ const ThankYou = lazy(() => import("./pages/ThankYou"));
 const ReportDashboard = lazy(() => import("./pages/app/ReportDashboard"));
 const ReportInbox = lazy(() => import("./pages/app/ReportInbox"));
 const ReportDetail = lazy(() => import("./pages/app/ReportDetail"));
-const SellerProfile = lazy(() => import("./pages/app/SellerProfile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
@@ -85,7 +84,6 @@ const App = () => {
                 <Route path="/app" element={<ReportDashboard />}>
                   <Route index element={<ReportInbox />} />
                   <Route path="report/:requestId" element={<ReportDetail />} />
-                  <Route path="profile" element={<SellerProfile />} />
                 </Route>
 
                 {/* 404 */}

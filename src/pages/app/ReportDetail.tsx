@@ -77,36 +77,9 @@ export default function ReportDetail() {
   });
 
   const loadData = useCallback(async () => {
-    // 1. Log user authentication status
-    console.log("🔐 [ReportDetail] User authentication status:", {
-      user: user ? {
-        id: user.id,
-        email: user.email,
-        authenticated: true
-      } : null,
-      hasUser: !!user,
-      requestId: requestId
-    });
-
     if (!user || !requestId) {
-      console.warn("⚠️ [ReportDetail] Missing user or requestId, aborting loadData", {
-        hasUser: !!user,
-        requestId: requestId
-      });
       return;
     }
-
-    // 2. Log exact query parameters being sent to Supabase
-    const queryParams = {
-      table: "research_requests",
-      select: `*, research_reports(*)`,
-      filters: {
-        id: requestId,
-        user_id: user.id
-      },
-      single: true
-    };
-    console.log("📤 [ReportDetail] Supabase query parameters:", JSON.stringify(queryParams, null, 2));
 
     const { data: requestData, error } = await supabase
       .from("research_requests")
@@ -118,32 +91,9 @@ export default function ReportDetail() {
       .eq("user_id", user.id)
       .single();
 
-    // 3. Log raw response data from Supabase queries
-    console.log("📥 [ReportDetail] Raw Supabase response:", {
-      error: error ? {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
-      } : null,
-      hasData: !!requestData,
-      dataKeys: requestData ? Object.keys(requestData) : null,
-      researchReports: requestData?.research_reports,
-      researchReportsType: typeof requestData?.research_reports,
-      researchReportsIsArray: Array.isArray(requestData?.research_reports),
-      researchReportsLength: Array.isArray(requestData?.research_reports) ? requestData.research_reports.length : "NOT ARRAY"
-    });
-
-    // Log the complete requestData structure for debugging
-    if (requestData) {
-      console.log("📋 [ReportDetail] Complete requestData:", JSON.stringify(requestData, null, 2));
-    }
-
     if (error) {
-      console.error("❌ [ReportDetail] Failed to load request:", error);
       setIsLoading(false);
       if (error.code === 'PGRST116') {
-        console.warn("⚠️ [ReportDetail] Report not found (PGRST116) - may be permission issue or doesn't exist");
         toast.error("Report not found");
         navigate("/app");
       } else {
@@ -151,41 +101,6 @@ export default function ReportDetail() {
       }
       return;
     }
-
-    // 4. Check specifically for Hartford PD report
-    const isHartfordReport = requestData?.target_account?.toLowerCase().includes("hartford");
-    console.log("🔍 [ReportDetail] Hartford PD report check:", {
-      isHartfordReport,
-      target_account: requestData?.target_account,
-      requestId: requestData?.id,
-      status: requestData?.status,
-      user_id: requestData?.user_id,
-      matchesRequestedUserId: requestData?.user_id === user.id
-    });
-
-    // 5. Log detailed report data
-    console.log("📄 [ReportDetail] Loaded request detail:", {
-      id: requestData?.id,
-      target_account: requestData?.target_account,
-      status: requestData?.status,
-      created_at: requestData?.created_at,
-      user_id: requestData?.user_id,
-      has_report: requestData?.research_reports ? (Array.isArray(requestData.research_reports) ? requestData.research_reports.length > 0 : true) : false,
-      report_count: Array.isArray(requestData?.research_reports) ? requestData.research_reports.length : (requestData?.research_reports ? 1 : 0),
-      reports: Array.isArray(requestData?.research_reports)
-        ? requestData.research_reports.map((r: any) => ({
-            id: r.id,
-            summary: r.summary?.substring(0, 100),
-            generated_at: r.generated_at,
-            has_content: !!r.content
-          }))
-        : (requestData?.research_reports ? [{
-            id: requestData.research_reports.id,
-            summary: requestData.research_reports.summary?.substring(0, 100),
-            generated_at: requestData.research_reports.generated_at,
-            has_content: !!requestData.research_reports.content
-          }] : [])
-    });
 
     setData(requestData);
     setIsLoading(false);
@@ -210,13 +125,6 @@ export default function ReportDetail() {
           filter: `request_id=eq.${requestId}`,
         },
         (payload) => {
-          console.log('📝 [ReportDetail] Research report inserted:', {
-            reportId: payload.new.id,
-            requestId: payload.new.request_id,
-            userId: payload.new.user_id,
-            matchesCurrentUser: payload.new.user_id === user?.id,
-            matchesRequestId: payload.new.request_id === requestId
-          });
           setData(prev => prev ? {
             ...prev,
             research_reports: payload.new as ResearchReport,
@@ -238,12 +146,6 @@ export default function ReportDetail() {
           filter: `request_id=eq.${requestId}`,
         },
         (payload) => {
-          console.log('🧠 [ReportDetail] Agent memory inserted:', {
-            memoryId: payload.new.id,
-            requestId: payload.new.request_id,
-            memoryType: payload.new.memory_type,
-            matchesRequestId: payload.new.request_id === requestId
-          });
           const memoryType = payload.new.memory_type as keyof AgentProgress;
           if (memoryType in agentProgress) {
             setAgentProgress(prev => ({
@@ -269,14 +171,12 @@ export default function ReportDetail() {
 
       const token = sessionData.session?.access_token;
 
-      const { data: invokeData, error: invokeError } = await supabase.functions.invoke("research-target-account", {
+      const { error: invokeError } = await supabase.functions.invoke("research-target-account", {
         body: { requestId: data.id },
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
 
       if (invokeError) {
-        console.error("Failed to retry research:", invokeError);
-
         if (invokeError && typeof invokeError === 'object' && 'context' in invokeError) {
              const response = (invokeError as any).context as Response;
              if (response?.status === 401) {
@@ -292,7 +192,6 @@ export default function ReportDetail() {
       // Update local state to show pending status
       setData(prev => prev ? { ...prev, status: 'pending' } : null);
     } catch (error) {
-      console.error("Failed to retry research:", error);
       toast.error("We could not restart the research. Please try again.");
     } finally {
       setIsRetrying(false);
@@ -356,40 +255,8 @@ export default function ReportDetail() {
     : (data.research_reports && typeof data.research_reports === 'object')
       ? data.research_reports
       : undefined;
-  console.log("📊 [ReportDetail] Report variable assignment:", {
-    dataResearchReports: data.research_reports,
-    isArray: Array.isArray(data.research_reports),
-    arrayLength: Array.isArray(data.research_reports) ? data.research_reports.length : "N/A",
-    firstItem: Array.isArray(data.research_reports) ? data.research_reports[0] : "N/A",
-    reportResult: report,
-    reportHasContent: !!report?.content
-  });
   const title = report?.content?.title || data.target_account;
   const sources = report?.sources || [];
-
-  // Log what's being rendered
-  console.log("🎨 [ReportDetail] Rendering component:", {
-    hasData: !!data,
-    target_account: data?.target_account,
-    status: data?.status,
-    hasReport: !!report,
-    reportType: typeof report,
-    reportKeys: report ? Object.keys(report) : null,
-    reportId: report?.id,
-    reportContent: report?.content ? "HAS CONTENT" : "NO CONTENT",
-    reportContentKeys: report?.content ? Object.keys(report.content) : null,
-    reportSummary: report?.summary,
-    isNewYork: data?.target_account?.toLowerCase().includes("new york"),
-    researchReportsArray: Array.isArray(data?.research_reports),
-    researchReportsLength: Array.isArray(data?.research_reports) ? data.research_reports.length : "NOT ARRAY"
-  });
-
-  // Log the actual report content structure
-  if (report?.content) {
-    console.log("📄 [ReportDetail] Report content structure:", JSON.stringify(report.content, null, 2));
-  } else if (report) {
-    console.log("📄 [ReportDetail] Report structure (no content):", JSON.stringify(report, null, 2));
-  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-0">
@@ -495,26 +362,6 @@ export default function ReportDetail() {
         </div>
       )}
 
-      {/* Debug the report rendering condition */}
-      {console.log("🔍 [ReportDetail] Report render condition:", {
-        status: data.status,
-        statusIsCompleted: data.status === "completed",
-        dataResearchReports: data.research_reports,
-        dataResearchReportsType: typeof data.research_reports,
-        dataResearchReportsIsArray: Array.isArray(data.research_reports),
-        dataResearchReportsLength: Array.isArray(data.research_reports) ? data.research_reports.length : "NOT ARRAY",
-        reportVariable: report,
-        reportIsUndefined: report === undefined,
-        reportIsNull: report === null,
-        hasReport: !!report,
-        reportTruthy: Boolean(report),
-        reportContentExists: !!report?.content,
-        reportHasTopInsight: !!report?.content?.topInsight,
-        reportHasAccountSnapshot: !!report?.content?.accountSnapshot,
-        reportHasSections: Array.isArray(report?.content?.sections) && report.content.sections.length > 0,
-        willRender: data.status === "completed" && report
-      })}
-
       {data.status === "completed" && report && (
         <div className="prose prose-gray prose-lg max-w-none">
           {/* Top Insight (new format) */}
@@ -570,36 +417,23 @@ export default function ReportDetail() {
             </div>
           )}
 
-          {/* Fallback for old format reports with no structured content */}
-          {!report.content?.topInsight && !report.content?.accountSnapshot && !report.content?.sections && report.content && (
-            <div className="bg-yellow-50 border border-yellow-200 p-6 mb-8 rounded-lg">
-              <h3 className="text-lg font-semibold text-yellow-800 mb-2">Legacy Report Format</h3>
-              <p className="text-yellow-700">
-                This report was generated with an older format. The content is available but may not be as structured.
-                Consider regenerating the report to get the enhanced format with detailed insights and actionable recommendations.
-              </p>
-              <pre className="mt-4 p-4 bg-yellow-100 rounded text-sm overflow-auto max-h-60">
-                {JSON.stringify(report.content, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          {/* Debug: Show raw report data if no content rendered */}
+          {/* Fallback for older report formats */}
           {data.status === "completed" && report && !report.content?.topInsight && !report.content?.accountSnapshot && !Array.isArray(report.content?.sections) && (
-            <div className="bg-red-50 border border-red-200 p-6 mb-8 rounded-lg">
-              <h3 className="text-lg font-semibold text-red-800 mb-2">Debug: No Content Rendered</h3>
-              <p className="text-red-700 mb-4">
-                The report exists but no content sections are rendering. Here's the raw report data:
+            <div className="bg-amber-50 border border-amber-200 p-6 mb-8 rounded-lg">
+              <h3 className="text-lg font-semibold text-amber-900 mb-2">Older Report Format</h3>
+              <p className="text-amber-800 mb-4">
+                This report uses an older format. Re-run research to get the latest version with structured insights.
               </p>
-              <details className="mb-4">
-                <summary className="cursor-pointer text-red-700 font-medium">Click to show full report data</summary>
-                <pre className="mt-2 p-4 bg-red-100 rounded text-sm overflow-auto max-h-96">
-                  {JSON.stringify(report, null, 2)}
-                </pre>
-              </details>
-              <p className="text-sm text-red-600">
-                Check the browser console for detailed logs about why content isn't rendering.
-              </p>
+              <Button
+                onClick={handleRetryResearch}
+                disabled={isRetrying}
+                variant="outline"
+                size="sm"
+                className="gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
+                {isRetrying ? "Re-queuing..." : "Re-run research"}
+              </Button>
             </div>
           )}
 
